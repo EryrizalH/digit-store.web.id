@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "digit-store",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-02-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "digit_store_db",
+      "database_id": "426918f4-c8d1-47d3-a716-dcaf8f8bac50"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES_BUCKET",
+      "bucket_name": "digit-store-files"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "596d76d05bbc4787bff79c9c35d6be78"
+    }
+  ],
+  "vars": {
+    "PAYMENT_PROVIDER": "midtrans",
+    "APP_URL": "https://digit-store.eryrizal23.workers.dev",
+    "HEROSMS_BASE_URL": "https://hero-sms.com/stubs/handler_api.php"
+  }
+}

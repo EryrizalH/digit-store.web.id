@@ -1,0 +1,6 @@
+{
+  "name": "project-full-access",
+  "description": "Project-local Kiro agent with all built-in tools enabled and auto-approved.",
+  "tools": ["*"],
+  "allowedTools": ["@builtin"]
+}
