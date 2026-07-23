@@ -1,5 +1,4 @@
 // ponytail: Simple KV sliding rate limiter
-import { KVNamespace } from '@cloudflare/workers-types';
 
 export interface RateLimitResult {
   success: boolean;
@@ -9,7 +8,7 @@ export interface RateLimitResult {
 }
 
 export async function checkRateLimit(
-  kv: KVNamespace | undefined,
+  kv: any,
   key: string,
   limit: number = 60,
   windowSeconds: number = 60

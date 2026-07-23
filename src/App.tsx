@@ -31,7 +31,7 @@ export const MainContent: React.FC = () => {
 
       const res = await fetch(url);
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         setProducts(data.products || []);
       }
     } catch {
@@ -45,7 +45,7 @@ export const MainContent: React.FC = () => {
     try {
       const res = await fetch('/api/products/categories');
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         setCategories(data.categories || []);
       }
     } catch {

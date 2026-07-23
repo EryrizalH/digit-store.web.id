@@ -22,7 +22,7 @@ export const OrdersView: React.FC = () => {
     try {
       const res = await fetch('/api/orders');
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         setOrders(data.orders || []);
         if (data.orders?.length > 0 && !selectedOrderId) {
           setSelectedOrderId(data.orders[0].id);
@@ -39,7 +39,7 @@ export const OrdersView: React.FC = () => {
     try {
       const res = await fetch(`/api/orders/${id}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         setOrderDetail(data);
       }
     } catch {

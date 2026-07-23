@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Smartphone, RefreshCw, Copy, Check, Clock, AlertTriangle, XCircle } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Smartphone, RefreshCw, Copy, Check, Clock, AlertTriangle, XCircle, AlertCircle } from 'lucide-react';
 import { SmsActivation } from '../types';
 
 interface SmsActivationViewerProps {
@@ -11,33 +11,49 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const isFetchingRef = useRef(false);
 
   const fetchStatus = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const res = await fetch(`/api/activations/${activationId}/poll`);
+      const data = (await res.json()) as any;
       if (res.ok) {
-        const data = await res.json();
+        setError(null);
         setActivation(data.activation || null);
+      } else {
+        if (data.activation) setActivation(data.activation);
+        setError(data.details ? `${data.error}: ${data.details}` : (data.error || 'Gagal mengecek status SMS'));
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Gagal terhubung ke server');
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // ponytail: Initial status fetch
     fetchStatus();
+  }, [activationId]);
 
-    // Auto poll every 3 seconds if status is WAITING_CODE
-    const interval = setInterval(() => {
-      if (activation?.status === 'WAITING_CODE' || !activation) {
+  useEffect(() => {
+    // ponytail: Auto-poll every 3s only for active WAITING_CODE with no errors
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    if (!error && (!activation || activation.status === 'WAITING_CODE')) {
+      interval = setInterval(() => {
         fetchStatus();
-      }
-    }, 3000);
+      }, 3000);
+    }
 
-    return () => clearInterval(interval);
-  }, [activationId, activation?.status]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activationId, activation?.status, error]);
 
   const handleCopyCode = () => {
     if (activation?.sms_code) {
@@ -49,7 +65,26 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
 
   const handleCancel = async () => {
     if (!window.confirm('Batalkan aktivasi nomor ini?')) return;
-    await fetch(`/api/activations/${activationId}/cancel`, { method: 'POST' });
+    setCancelling(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/activations/${activationId}/cancel`, { method: 'POST' });
+      const data = (await res.json()) as any;
+      if (!res.ok) {
+        setError(data.details ? `${data.error}: ${data.details}` : (data.error || 'Gagal membatalkan aktivasi'));
+      } else {
+        setError(null);
+        await fetchStatus();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Gagal membatalkan aktivasi');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleRetry = () => {
+    setError(null);
     fetchStatus();
   };
 
@@ -61,10 +96,41 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
     );
   }
 
+  if (!activation && error) {
+    return (
+      <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-2xl text-xs text-rose-300 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" /> {error}
+        </div>
+        <button
+          onClick={handleRetry}
+          className="text-[10px] underline hover:text-white shrink-0 font-bold"
+        >
+          Coba lagi
+        </button>
+      </div>
+    );
+  }
+
   if (!activation) return null;
 
   return (
     <div className="glass-card rounded-2xl p-5 border border-purple-900/40 relative">
+      {error && (
+        <div className="mb-4 p-3 bg-rose-950/60 border border-rose-800/60 rounded-xl text-xs text-rose-300 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={handleRetry}
+            className="text-[10px] underline hover:text-white shrink-0 font-bold"
+          >
+            Coba lagi
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-2.5">
           <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
@@ -92,6 +158,11 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
           {activation.status === 'CANCELLED' && (
             <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/20 flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5" /> Dibatalkan
+            </span>
+          )}
+          {activation.status === 'TIMEOUT' && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-slate-700/50 text-slate-300 border border-slate-600/40 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Waktu Habis
             </span>
           )}
         </div>
@@ -126,10 +197,19 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
           </span>
           <button
             onClick={handleCancel}
-            className="px-3 py-1.5 rounded-lg bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900 transition-all shrink-0 ml-3"
+            disabled={cancelling}
+            className="px-3 py-1.5 rounded-lg bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900 transition-all shrink-0 ml-3 disabled:opacity-50"
           >
-            Batalkan
+            {cancelling ? 'Membatalkan...' : 'Batalkan'}
           </button>
+        </div>
+      ) : activation.status === 'TIMEOUT' ? (
+        <div className="bg-slate-950/60 rounded-2xl p-4 border border-slate-800 text-xs text-slate-400">
+          Aktivasi telah kedaluwarsa (TIMEOUT). Waktu tunggu nomor ini telah habis tanpa menerima SMS.
+        </div>
+      ) : activation.status === 'CANCELLED' ? (
+        <div className="bg-slate-950/60 rounded-2xl p-4 border border-slate-800 text-xs text-slate-400">
+          Aktivasi ini telah dibatalkan.
         </div>
       ) : null}
     </div>

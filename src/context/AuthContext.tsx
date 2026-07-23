@@ -27,7 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await fetch('/api/auth/me');
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         setUser(data.user || null);
       }
     } catch {
@@ -54,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass })
     });
-    const data = await res.json();
+    const data = (await res.json()) as any;
     if (res.ok && data.user) {
       setUser(data.user);
       closeAuthModal();
@@ -69,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pass })
     });
-    const data = await res.json();
+    const data = (await res.json()) as any;
     if (res.ok && data.user) {
       setUser(data.user);
       closeAuthModal();

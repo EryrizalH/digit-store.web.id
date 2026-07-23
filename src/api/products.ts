@@ -64,7 +64,7 @@ productsRouter.get('/by-slug/:slug', async (c) => {
     WHERE p.slug = ? AND p.is_active = 1
   `).bind(slug).first();
 
-  if (!product) return c.json({ error: 'Product not found' }, 44);
+  if (!product) return c.json({ error: 'Product not found' }, 404);
   return c.json({ product });
 });
 

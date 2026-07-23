@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env } from '../types';
 import { getSessionUser } from '../services/auth';
-import { HeroSmsClient } from '../services/herosms';
+import { HeroSmsClient, HeroSmsError } from '../services/herosms';
 import { checkRateLimit } from '../services/rate-limit';
 
 export const activationsRouter = new Hono<{ Bindings: Env }>();
@@ -30,23 +30,32 @@ activationsRouter.get('/:id/poll', async (c) => {
 
   if (activation.status === 'WAITING_CODE') {
     const heroClient = new HeroSmsClient(c.env.HEROSMS_API_KEY || '', c.env.HEROSMS_BASE_URL);
-    const result = await heroClient.getStatus(activation.herosms_id);
+    try {
+      const result = await heroClient.getStatus(activation.herosms_id);
 
-    if (result.status === 'RECEIVED') {
-      await c.env.DB.prepare(`
-        UPDATE sms_activations
-        SET status = 'RECEIVED', sms_code = ?, sms_text = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).bind(result.code || '', result.fullText || '', activation.id).run();
+      if (result.status === 'RECEIVED') {
+        await c.env.DB.prepare(`
+          UPDATE sms_activations
+          SET status = 'RECEIVED', sms_code = ?, sms_text = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(result.code || '', result.fullText || '', activation.id).run();
 
-      activation.status = 'RECEIVED';
-      activation.sms_code = result.code;
-      activation.sms_text = result.fullText;
-    } else if (result.status === 'TIMEOUT' || result.status === 'CANCELLED') {
-      await c.env.DB.prepare(`
-        UPDATE sms_activations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-      `).bind(result.status, activation.id).run();
-      activation.status = result.status;
+        activation.status = 'RECEIVED';
+        activation.sms_code = result.code;
+        activation.sms_text = result.fullText;
+      } else if (result.status === 'TIMEOUT' || result.status === 'CANCELLED') {
+        await c.env.DB.prepare(`
+          UPDATE sms_activations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        `).bind(result.status, activation.id).run();
+        activation.status = result.status;
+      }
+    } catch (err: any) {
+      // Preserve activation state in DB, return 502 Bad Gateway with provider error details
+      return c.json({
+        error: 'HeroSMS provider status check failed',
+        details: err instanceof HeroSmsError ? err.code : (err.message || 'Provider error'),
+        activation
+      }, 502);
     }
   }
 
@@ -68,11 +77,23 @@ activationsRouter.post('/:id/cancel', async (c) => {
   }
 
   const heroClient = new HeroSmsClient(c.env.HEROSMS_API_KEY || '', c.env.HEROSMS_BASE_URL);
-  await heroClient.cancelActivation(activation.herosms_id);
+  try {
+    const success = await heroClient.cancelActivation(activation.herosms_id);
+    if (!success) {
+      return c.json({ error: 'Cancellation rejected by provider', activation }, 400);
+    }
 
-  await c.env.DB.prepare(`
-    UPDATE sms_activations SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `).bind(activation.id).run();
+    await c.env.DB.prepare(`
+      UPDATE sms_activations SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).bind(activation.id).run();
 
-  return c.json({ success: true, message: 'Activation cancelled' });
+    return c.json({ success: true, message: 'Activation cancelled' });
+  } catch (err: any) {
+    // Preserve activation state in DB if cancellation fails or is rejected
+    return c.json({
+      error: 'Cancellation failed',
+      details: err instanceof HeroSmsError ? err.code : (err.message || 'Provider cancellation error'),
+      activation
+    }, 400);
+  }
 });

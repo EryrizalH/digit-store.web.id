@@ -103,6 +103,7 @@ export interface OrderStockAllocation {
   order_item_id: string;
   stock_code_id: string;
   code: string;
+  product_name?: string;
 }
 
 export interface FileEntitlement {

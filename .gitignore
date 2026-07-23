@@ -20,6 +20,7 @@ pnpm-debug.log*
 
 # Environment variables & local secrets
 .env
+.dev.vars
 .env.local
 .env.*.local
 

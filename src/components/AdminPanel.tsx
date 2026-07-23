@@ -27,7 +27,7 @@ export const AdminPanel: React.FC = () => {
   const fetchProducts = async () => {
     const res = await fetch('/api/products');
     if (res.ok) {
-      const data = await res.json();
+      const data = (await res.json()) as any;
       setProducts(data.products || []);
     }
   };
@@ -35,7 +35,7 @@ export const AdminPanel: React.FC = () => {
   const fetchCategories = async () => {
     const res = await fetch('/api/products/categories');
     if (res.ok) {
-      const data = await res.json();
+      const data = (await res.json()) as any;
       setCategories(data.categories || []);
     }
   };
@@ -58,7 +58,7 @@ export const AdminPanel: React.FC = () => {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json();
+      const data = (await res.json()) as any;
       if (data.success) {
         setR2Key(data.r2_key);
         alert(`File berhasil diunggah ke R2: ${data.r2_key}`);
@@ -101,7 +101,7 @@ export const AdminPanel: React.FC = () => {
       setR2Key('');
       fetchProducts();
     } else {
-      const err = await res.json();
+      const err = (await res.json()) as any;
       alert(err.error || 'Gagal menambahkan produk');
     }
   };
@@ -117,7 +117,7 @@ export const AdminPanel: React.FC = () => {
       body: JSON.stringify({ product_id: selectedProductId, codes }),
     });
 
-    const data = await res.json();
+    const data = (await res.json()) as any;
     if (res.ok) {
       setStockMsg(`Berhasil menambah ${data.added} stok kode baru!`);
       setBulkCodesText('');

@@ -1,5 +1,12 @@
 // ponytail: HeroSMS Client (SMS-Activate standard stub & mock fallback)
 
+export class HeroSmsError extends Error {
+  constructor(public code: string, message?: string) {
+    super(message || `HeroSMS provider error: ${code}`);
+    this.name = 'HeroSmsError';
+  }
+}
+
 export interface HerosmsNumberResponse {
   activationId: string;
   phone: string;
@@ -20,6 +27,17 @@ export class HeroSmsClient {
     this.baseUrl = baseUrl;
   }
 
+  // ponytail: Build safely encoded URL using URL & URLSearchParams
+  buildUrl(action: string, params: Record<string, string> = {}): string {
+    const url = new URL(this.baseUrl);
+    url.searchParams.set('api_key', this.apiKey);
+    url.searchParams.set('action', action);
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+    return url.toString();
+  }
+
   async requestNumber(service: string, country: string = '0'): Promise<HerosmsNumberResponse> {
     if (!this.apiKey) {
       // Mock mode for local dev / testing
@@ -28,9 +46,12 @@ export class HeroSmsClient {
       return { activationId: mockId, phone: mockPhone };
     }
 
-    const url = `${this.baseUrl}?api_key=${this.apiKey}&action=getNumber&service=${service}&country=${country}`;
+    const url = this.buildUrl('getNumber', { service, country });
     const res = await fetch(url);
-    const text = await res.text();
+    if (!res.ok) {
+      throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
+    }
+    const text = (await res.text()).trim();
 
     if (text.startsWith('ACCESS_NUMBER')) {
       const parts = text.split(':');
@@ -40,7 +61,7 @@ export class HeroSmsClient {
       };
     }
 
-    throw new Error(`HeroSMS requestNumber error: ${text}`);
+    throw new HeroSmsError(text);
   }
 
   async getStatus(activationId: string): Promise<HerosmsStatusResponse> {
@@ -61,19 +82,21 @@ export class HeroSmsClient {
       return { status: 'WAITING_CODE' };
     }
 
-    const url = `${this.baseUrl}?api_key=${this.apiKey}&action=getStatus&id=${activationId}`;
+    const url = this.buildUrl('getStatus', { id: activationId });
     const res = await fetch(url);
-    const text = await res.text();
+    if (!res.ok) {
+      throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
+    }
+    const text = (await res.text()).trim();
 
-    if (text === 'STATUS_WAIT_CODE') {
+    if (text === 'STATUS_WAIT_CODE' || text === 'STATUS_WAIT_RETRY' || text === 'STATUS_WAIT_RESEND') {
       return { status: 'WAITING_CODE' };
     }
     if (text.startsWith('STATUS_OK')) {
       const parts = text.split(':');
-      const code = parts[1];
       return {
         status: 'RECEIVED',
-        code: code,
+        code: parts[1] || '',
         fullText: text
       };
     }
@@ -81,14 +104,33 @@ export class HeroSmsClient {
       return { status: 'CANCELLED' };
     }
 
-    return { status: 'WAITING_CODE' };
+    throw new HeroSmsError(text);
   }
 
   async cancelActivation(activationId: string): Promise<boolean> {
     if (!this.apiKey || activationId.startsWith('act_')) return true;
-    const url = `${this.baseUrl}?api_key=${this.apiKey}&action=setStatus&id=${activationId}&status=8`;
+    const url = this.buildUrl('setStatus', { id: activationId, status: '8' });
     const res = await fetch(url);
-    const text = await res.text();
-    return text.includes('ACCESS_CANCEL');
+    if (!res.ok) {
+      throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
+    }
+    const text = (await res.text()).trim();
+    // ponytail: Strict cancellation response matching
+    if (text === 'ACCESS_CANCEL' || text === 'ACCESS_CANCEL_ALREADY') {
+      return true;
+    }
+    throw new HeroSmsError(text);
+  }
+
+  async getBalance(): Promise<string> {
+    if (!this.apiKey) return '0.00 (mock)';
+    const url = this.buildUrl('getBalance');
+    const res = await fetch(url);
+    if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
+    const text = (await res.text()).trim();
+    if (text.startsWith('ACCESS_BALANCE:')) {
+      return text.split(':')[1] || '0';
+    }
+    throw new HeroSmsError(text);
   }
 }
