@@ -1,10 +1,10 @@
-// ponytail: Admin Panel with minimal artwork upload affordance per requirement
+// ponytail: Admin Panel with Product management, Stock Code bulk import, and OTP pricing settings management
 import React, { useState, useEffect } from 'react';
-import { Product, Category } from '../types';
-import { Plus, Upload, Key, Package, ShieldCheck, Image as ImageIcon } from 'lucide-react';
+import { Product, Category, OtpSettings } from '../types';
+import { Plus, Upload, Key, Package, ShieldCheck, Image as ImageIcon, Sliders, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'products' | 'stock'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'stock' | 'otp'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   
@@ -26,6 +26,16 @@ export const AdminPanel: React.FC = () => {
   const [bulkCodesText, setBulkCodesText] = useState('');
   const [stockMsg, setStockMsg] = useState('');
 
+  // OTP Pricing Settings form
+  const [otpEnabled, setOtpEnabled] = useState(false);
+  const [providerCurrency, setProviderCurrency] = useState('RUB');
+  const [rate, setRate] = useState('200');
+  const [markupPercent, setMarkupPercent] = useState('20');
+  const [minSalePriceIdr, setMinSalePriceIdr] = useState('5000');
+  const [savingOtpSettings, setSavingOtpSettings] = useState(false);
+  const [otpMsg, setOtpMsg] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
   const fetchProducts = async () => {
     const res = await fetch('/api/products');
     if (res.ok) {
@@ -42,9 +52,28 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const fetchOtpSettings = async () => {
+    try {
+      const res = await fetch('/api/otp/settings');
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        if (data.settings) {
+          setOtpEnabled(data.settings.enabled === 1);
+          setProviderCurrency(data.settings.provider_currency || 'RUB');
+          setRate(String(data.settings.rate || '200'));
+          setMarkupPercent(String(data.settings.markup_percent || '20'));
+          setMinSalePriceIdr(String(data.settings.min_price_idr || '5000'));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchOtpSettings();
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,6 +182,39 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleSaveOtpSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingOtpSettings(true);
+    setOtpMsg(null);
+    setOtpError(null);
+
+    try {
+      const res = await fetch('/api/otp/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: otpEnabled,
+          providerCurrency: providerCurrency.trim().toUpperCase(),
+          rate: parseFloat(rate),
+          markupPercent: parseFloat(markupPercent),
+          minSalePriceIdr: parseFloat(minSalePriceIdr)
+        })
+      });
+
+      const data = (await res.json()) as any;
+      if (res.ok && data.success) {
+        setOtpMsg('Pengaturan harga HeroSMS OTP berhasil disimpan & aktif!');
+        fetchOtpSettings();
+      } else {
+        setOtpError(data.error || 'Gagal menyimpan pengaturan OTP');
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Terjadi kesalahan jaringan');
+    } finally {
+      setSavingOtpSettings(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 lg:px-8">
       <div className="flex items-center justify-between gap-4 mb-8">
@@ -179,6 +241,14 @@ export const AdminPanel: React.FC = () => {
             }`}
           >
             Import Stok Kode
+          </button>
+          <button
+            onClick={() => setActiveTab('otp')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
+              activeTab === 'otp' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Pengaturan Harga OTP
           </button>
         </div>
       </div>
@@ -234,7 +304,7 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Harga (IDR)</label>
+                <label className="text-slate-300 font-semibold block mb-1">Harga Acuan (IDR)</label>
                 <input
                   type="number"
                   required
@@ -261,7 +331,7 @@ export const AdminPanel: React.FC = () => {
               {type === 'herosms' && (
                 <div className="p-3 bg-purple-950/40 border border-purple-800/50 rounded-xl grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-purple-300 font-semibold block">Service Code</label>
+                    <label className="text-purple-300 font-semibold block">Service Default</label>
                     <input
                       type="text"
                       value={herosmsService}
@@ -271,7 +341,7 @@ export const AdminPanel: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-purple-300 font-semibold block">Country Code</label>
+                    <label className="text-purple-300 font-semibold block">Country Default</label>
                     <input
                       type="text"
                       value={herosmsCountry}
@@ -338,7 +408,9 @@ export const AdminPanel: React.FC = () => {
                       </td>
                       <td className="p-3 font-semibold text-white">{p.name}</td>
                       <td className="p-3 uppercase font-bold text-slate-400">{p.type}</td>
-                      <td className="p-3 font-mono text-emerald-400">Rp {p.price.toLocaleString()}</td>
+                      <td className="p-3 font-mono text-emerald-400">
+                        {p.type === 'herosms' ? 'Dinamis (Configurator)' : `Rp ${p.price.toLocaleString()}`}
+                      </td>
                       <td className="p-3 font-bold text-indigo-300">{p.stock_count ?? '-'}</td>
                       <td className="p-3">
                         <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-all">
@@ -409,6 +481,112 @@ export const AdminPanel: React.FC = () => {
               className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md min-h-[44px]"
             >
               Upload Stok Kode
+            </button>
+          </form>
+        </div>
+      )}
+
+      {activeTab === 'otp' && (
+        <div className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-5">
+          <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-purple-400" /> Pengaturan Harga HeroSMS OTP
+          </h3>
+
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Formula Harga Jual IDR: <code className="text-purple-300 bg-purple-950/60 px-2 py-1 rounded">ceil(max(providerCost * rate * (1 + markupPercent/100), minimumSalePriceIdr))</code>
+          </p>
+
+          {otpMsg && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" /> {otpMsg}
+            </div>
+          )}
+
+          {otpError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400" /> {otpError}
+            </div>
+          )}
+
+          <form onSubmit={handleSaveOtpSettings} className="space-y-4 text-xs">
+            {/* Status Enable Toggle */}
+            <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="font-bold text-white block">Status Konfigurator OTP</span>
+                <span className="text-[11px] text-slate-400">Aktifkan untuk mengizinkan pembelian nomor OTP di toko.</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={otpEnabled}
+                  onChange={(e) => setOtpEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Mata Uang Provider</label>
+                <input
+                  type="text"
+                  required
+                  value={providerCurrency}
+                  onChange={(e) => setProviderCurrency(e.target.value)}
+                  placeholder="RUB"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Kurs Provider ke IDR (Rate)</label>
+                <input
+                  type="number"
+                  required
+                  step="any"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  placeholder="200"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Markup (%)</label>
+                <input
+                  type="number"
+                  required
+                  step="any"
+                  value={markupPercent}
+                  onChange={(e) => setMarkupPercent(e.target.value)}
+                  placeholder="20"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Harga Jual Minimum IDR</label>
+                <input
+                  type="number"
+                  required
+                  step="any"
+                  value={minSalePriceIdr}
+                  onChange={(e) => setMinSalePriceIdr(e.target.value)}
+                  placeholder="5000"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingOtpSettings}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-md transition-all min-h-[44px] disabled:opacity-50"
+            >
+              {savingOtpSettings ? 'Menyimpan...' : 'Simpan Pengaturan OTP'}
             </button>
           </form>
         </div>

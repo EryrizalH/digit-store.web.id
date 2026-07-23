@@ -7,6 +7,8 @@ export interface Env {
   // Environment variables & secrets
   PAYMENT_PROVIDER?: string; // 'midtrans' | 'xendit'
   APP_URL?: string;
+  APP_ENV?: string;
+  ALLOW_SIMULATED_PAYMENTS?: string;
   
   MIDTRANS_SERVER_KEY?: string;
   MIDTRANS_CLIENT_KEY?: string;
@@ -27,7 +29,7 @@ export interface Env {
 export type Role = 'user' | 'admin';
 export type ProductType = 'file' | 'code' | 'herosms';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type ActivationStatus = 'WAITING_CODE' | 'RECEIVED' | 'CANCELLED' | 'TIMEOUT';
+export type ActivationStatus = 'WAITING_CODE' | 'RECEIVED' | 'CANCELLED' | 'TIMEOUT' | 'COMPLETED';
 
 export interface User {
   id: string;
@@ -90,6 +92,7 @@ export interface Order {
   updated_at: string;
 }
 
+// Public customer-facing order item (no internal provider max_price)
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -98,6 +101,18 @@ export interface OrderItem {
   product_type: ProductType;
   price: number;
   quantity: number;
+  service_code?: string | null;
+  service_name?: string | null;
+  country_code?: string | null;
+  country_name?: string | null;
+  quote_id?: string | null;
+  fulfilment_status?: 'pending' | 'processing' | 'fulfilled' | 'failed' | null;
+  fulfilment_error?: string | null;
+}
+
+// Internal server-side order item record
+export interface InternalOrderItem extends OrderItem {
+  max_price?: number | null;
 }
 
 export interface OrderStockAllocation {
@@ -118,11 +133,12 @@ export interface FileEntitlement {
   created_at: string;
 }
 
+// Public customer-facing activation (no internal provider costs or herosms_id)
 export interface SmsActivation {
   id: string;
+  order_item_id?: string | null;
   order_id: string;
   user_id: string;
-  herosms_id: string;
   herosms_phone: string;
   herosms_service: string;
   herosms_country: string;
@@ -131,6 +147,46 @@ export interface SmsActivation {
   sms_text?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Internal server-side activation record
+export interface InternalSmsActivation extends SmsActivation {
+  herosms_id: string;
+  provider_cost?: number | null;
+  provider_currency?: string | null;
+}
+
+export interface OtpSettings {
+  id: number;
+  enabled: number;
+  provider_currency: string;
+  rate: number;
+  markup_percent: number;
+  min_price_idr: number;
+  updated_at: string;
+}
+
+export interface OtpQuote {
+  quoteId: string;
+  serviceCode: string;
+  serviceName: string;
+  countryCode: string;
+  countryName: string;
+  sellingPriceIdr: number;
+  expiresAt: number;
+  availableCount: number;
+}
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+  serviceCode?: string;
+  serviceName?: string;
+  countryCode?: string;
+  countryName?: string;
+  quoteId?: string;
+  expiresAt?: number;
+  price?: number; // Quoted selling price for OTP
 }
 
 export interface AuditLog {

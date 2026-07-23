@@ -1,13 +1,13 @@
-// ponytail: Route-driven Cart page with full-screen mobile sheet, desktop panel, and auth redirect
+// ponytail: CartPage supporting dynamic OTP route keying & 409 stale price change handling
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
+import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ShieldCheck, ArrowLeft, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
-  const { cart, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
+  const { cart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
   const { user } = useAuth();
 
   const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit'>('midtrans');
@@ -23,12 +23,12 @@ export const CartPage: React.FC = () => {
 
   const handleCheckout = async () => {
     if (!user) {
-      navigate('/masuk?next=/keranjang');
+      navigate(`/masuk?next=${encodeURIComponent('/keranjang')}`);
       return;
     }
 
     if (hasHeroSms && !agreedPolicy) {
-      setError('Wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum checkout.');
+      setError('Anda wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum melakukan checkout.');
       return;
     }
 
@@ -36,9 +36,16 @@ export const CartPage: React.FC = () => {
     setError(null);
 
     try {
-      const idempotencyKey = `idemp_${Date.now()}_${Math.random()}`;
+      const idempotencyKey = `idemp_${user.id}_${Date.now()}`;
       const payload = {
-        items: cart.map(item => ({ product_id: item.product.id, quantity: item.quantity })),
+        items: cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          service_code: item.serviceCode,
+          country_code: item.countryCode,
+          expires_at: item.expiresAt,
+          price: item.price !== undefined ? item.price : item.product.price
+        })),
         payment_provider: paymentProvider,
         idempotency_key: idempotencyKey,
         agreed_policy: agreedPolicy
@@ -51,6 +58,24 @@ export const CartPage: React.FC = () => {
       });
 
       const data = (await res.json()) as any;
+
+      if (res.status === 409 || data.code === 'OTP_PRICE_CHANGED') {
+        const fresh = data.freshQuote;
+        if (fresh && fresh.serviceCode && fresh.countryCode && fresh.freshSellingPrice) {
+          const pId = fresh.productId || cart.find(i => i.serviceCode === fresh.serviceCode)?.product.id || '';
+          updateOtpQuote(pId, fresh.serviceCode, fresh.countryCode, {
+            price: fresh.freshSellingPrice,
+            expiresAt: fresh.expiresAt,
+            quoteId: fresh.quoteId
+          });
+          const formattedPrice = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(fresh.freshSellingPrice);
+          setError(`Harga OTP untuk rute ${fresh.serviceCode} (${fresh.countryCode}) telah diperbarui menjadi ${formattedPrice}. Silakan tekan Lanjut ke Pembayaran lagi untuk mengonfirmasi.`);
+        } else {
+          setError(data.error || 'Harga layanan OTP telah diperbarui. Silakan tekan Lanjut ke Pembayaran lagi untuk konfirmasi.');
+        }
+        return;
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Checkout gagal');
       }
@@ -124,48 +149,67 @@ export const CartPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Cart Items List */}
           <div className="lg:col-span-2 space-y-3">
-            {cart.map((item) => (
-              <div
-                key={item.product.id}
-                className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-white truncate mb-1">
-                    {item.product.name}
-                  </h4>
-                  <span className="text-xs font-black text-emerald-400 block">
-                    {formatPrice(item.product.price)}
-                  </span>
-                </div>
+            {cart.map((item) => {
+              const itemKey = getCartItemKey(item);
+              const displayPrice = item.price !== undefined ? item.price : item.product.price;
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                    className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 flex items-center justify-center border border-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
-                    aria-label="Decrease quantity"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm font-extrabold text-white w-6 text-center">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                    className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 flex items-center justify-center border border-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
-                    aria-label="Increase quantity"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => removeFromCart(item.product.id)}
-                    className="w-10 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center ml-1 border border-rose-500/20 focus-visible:ring-2 focus-visible:ring-rose-500"
-                    aria-label="Remove item"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+              return (
+                <div
+                  key={itemKey}
+                  className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-white truncate mb-0.5">
+                      {item.product.name}
+                    </h4>
+                    {item.product.type === 'herosms' && (
+                      <p className="text-xs text-purple-300 font-medium mb-1">
+                        {item.serviceName || item.serviceCode} ({item.countryName || item.countryCode})
+                      </p>
+                    )}
+                    <span className="text-xs font-black text-emerald-400 block">
+                      {formatPrice(displayPrice)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {item.product.type === 'herosms' ? (
+                      <span className="text-xs font-bold text-purple-300 px-3 py-2 bg-purple-950/60 border border-purple-800/40 rounded-xl">
+                        1x
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => updateQuantity(itemKey, item.quantity - 1)}
+                          className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 flex items-center justify-center border border-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-extrabold text-white w-6 text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateQuantity(itemKey, item.quantity + 1)}
+                          className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 flex items-center justify-center border border-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => removeFromCart(itemKey)}
+                      className="w-10 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center ml-1 border border-rose-500/20 focus-visible:ring-2 focus-visible:ring-rose-500"
+                      aria-label="Remove item"
+                      title="Hapus Rute"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Payment & Checkout Summary Side Panel */}

@@ -1,5 +1,6 @@
+// ponytail: SMS Activation status viewer supporting polling, cancellation, explicit setStatus=6 completion, and COMPLETED state
 import React, { useEffect, useState, useRef } from 'react';
-import { Smartphone, RefreshCw, Copy, Check, Clock, AlertTriangle, XCircle, AlertCircle } from 'lucide-react';
+import { Smartphone, RefreshCw, Copy, Check, Clock, AlertTriangle, XCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { SmsActivation } from '../types';
 
 interface SmsActivationViewerProps {
@@ -12,6 +13,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const isFetchingRef = useRef(false);
 
   const fetchStatus = async () => {
@@ -36,12 +38,10 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
   };
 
   useEffect(() => {
-    // ponytail: Initial status fetch
     fetchStatus();
   }, [activationId]);
 
   useEffect(() => {
-    // ponytail: Auto-poll every 3s only for active WAITING_CODE with no errors
     let interval: ReturnType<typeof setInterval> | null = null;
 
     if (!error && (!activation || activation.status === 'WAITING_CODE')) {
@@ -80,6 +80,29 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
       setError(err.message || 'Gagal membatalkan aktivasi');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    setCompleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/activations/${activationId}/complete`, { method: 'POST' });
+      const data = (await res.json()) as any;
+      if (!res.ok) {
+        setError(data.details ? `${data.error}: ${data.details}` : (data.error || 'Gagal menyelesaikan aktivasi'));
+      } else {
+        setError(null);
+        if (data.activation) {
+          setActivation(data.activation);
+        } else {
+          await fetchStatus();
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Gagal menyelesaikan aktivasi');
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -155,6 +178,11 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
               <Check className="w-3.5 h-3.5 text-emerald-400" /> SMS Diterima
             </span>
           )}
+          {activation.status === 'COMPLETED' && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Selesai
+            </span>
+          )}
           {activation.status === 'CANCELLED' && (
             <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/20 flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5" /> Dibatalkan
@@ -168,27 +196,42 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
         </div>
       </div>
 
-      {activation.status === 'RECEIVED' && activation.sms_code ? (
-        <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-2xl p-4 mb-3 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider block">Kode OTP / Verification Code</span>
-            <span className="text-2xl font-black text-white font-mono tracking-widest">
-              {activation.sms_code}
-            </span>
-            {activation.sms_text && (
-              <p className="text-xs text-slate-300 mt-1 italic font-sans">
-                "{activation.sms_text}"
-              </p>
-            )}
-          </div>
+      {(activation.status === 'RECEIVED' || activation.status === 'COMPLETED') && activation.sms_code ? (
+        <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-2xl p-4 mb-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider block">Kode OTP / Verification Code</span>
+              <span className="text-2xl font-black text-white font-mono tracking-widest">
+                {activation.sms_code}
+              </span>
+              {activation.sms_text && (
+                <p className="text-xs text-slate-300 mt-1 italic font-sans">
+                  "{activation.sms_text}"
+                </p>
+              )}
+            </div>
 
-          <button
-            onClick={handleCopyCode}
-            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
-          >
-            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            <span>{copied ? 'Tersalin!' : 'Salin OTP'}</span>
-          </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyCode}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copied ? 'Tersalin!' : 'Salin OTP'}</span>
+              </button>
+
+              {activation.status === 'RECEIVED' && (
+                <button
+                  onClick={handleComplete}
+                  disabled={completing}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                  <span>{completing ? 'Memproses...' : 'Selesai'}</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       ) : activation.status === 'WAITING_CODE' ? (
         <div className="bg-slate-950/60 rounded-2xl p-4 border border-slate-800 flex items-center justify-between text-xs">

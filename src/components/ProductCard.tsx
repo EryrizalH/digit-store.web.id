@@ -1,8 +1,8 @@
-// ponytail: Compact artwork-led Product Card component with accessible touch targets & zero layout shift
+// ponytail: Compact artwork-led Product Card component with accessible touch targets & dynamic OTP configurator navigation
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
-import { Download, Key, Smartphone, ShoppingCart } from 'lucide-react';
+import { Download, Key, Smartphone, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { ArtworkImage } from './ArtworkImage';
 
@@ -12,6 +12,7 @@ interface ProductCardProps {
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart } = useCart();
+  const navigate = useNavigate();
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
@@ -34,11 +35,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       case 'herosms':
         return (
           <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1">
-            <Smartphone className="w-3.5 h-3.5" /> HeroSMS
+            <Smartphone className="w-3.5 h-3.5" /> HeroSMS OTP
           </span>
         );
       default:
         return null;
+    }
+  };
+
+  const handleAction = () => {
+    if (product.type === 'herosms') {
+      navigate(`/produk/${product.slug}`);
+    } else {
+      addToCart(product);
     }
   };
 
@@ -82,12 +91,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </p>
       </div>
 
-      {/* Pricing & Add to Cart */}
+      {/* Pricing & Action */}
       <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-3">
         <div>
           <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Harga</span>
           <span className="text-base font-extrabold text-white">
-            {formatPrice(product.price)}
+            {product.type === 'herosms' ? 'Konfigurator' : formatPrice(product.price)}
           </span>
         </div>
 
@@ -96,17 +105,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             to={`/produk/${product.slug}`}
             className="px-3 min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            Detail
+            {product.type === 'herosms' ? 'Konfigurasi' : 'Detail'}
           </Link>
 
           <button
-            onClick={() => addToCart(product)}
+            onClick={handleAction}
             disabled={product.type === 'code' && (product.stock_count || 0) <= 0}
             className="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
-            title="Tambah ke Keranjang"
-            aria-label="Tambah ke Keranjang"
+            title={product.type === 'herosms' ? 'Buka Konfigurator OTP' : 'Tambah ke Keranjang'}
+            aria-label={product.type === 'herosms' ? 'Buka Konfigurator OTP' : 'Tambah ke Keranjang'}
           >
-            <ShoppingCart className="w-5 h-5" />
+            {product.type === 'herosms' ? <SlidersHorizontal className="w-5 h-5" /> : <ShoppingCart className="w-5 h-5" />}
           </button>
         </div>
       </div>

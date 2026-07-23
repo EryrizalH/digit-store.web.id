@@ -66,7 +66,25 @@ CREATE TABLE IF NOT EXISTS order_items (
   product_name TEXT NOT NULL,
   product_type TEXT NOT NULL,
   price REAL NOT NULL,
-  quantity INTEGER NOT NULL
+  quantity INTEGER NOT NULL,
+  service_code TEXT,
+  service_name TEXT,
+  country_code TEXT,
+  country_name TEXT,
+  max_price REAL,
+  quote_id TEXT,
+  fulfilment_status TEXT DEFAULT 'pending',
+  fulfilment_error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS otp_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  enabled INTEGER NOT NULL DEFAULT 0,
+  provider_currency TEXT NOT NULL DEFAULT 'RUB',
+  rate REAL NOT NULL DEFAULT 0,
+  markup_percent REAL NOT NULL DEFAULT 0,
+  min_price_idr REAL NOT NULL DEFAULT 0,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS order_stock_allocations (
@@ -88,18 +106,23 @@ CREATE TABLE IF NOT EXISTS file_entitlements (
 
 CREATE TABLE IF NOT EXISTS sms_activations (
   id TEXT PRIMARY KEY,
+  order_item_id TEXT REFERENCES order_items(id),
   order_id TEXT NOT NULL REFERENCES orders(id),
   user_id TEXT NOT NULL REFERENCES users(id),
   herosms_id TEXT NOT NULL,
   herosms_phone TEXT NOT NULL,
   herosms_service TEXT NOT NULL,
   herosms_country TEXT NOT NULL,
+  provider_cost REAL,
+  provider_currency TEXT,
   status TEXT NOT NULL DEFAULT 'WAITING_CODE',
   sms_code TEXT,
   sms_text TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_activations_order_item_id ON sms_activations (order_item_id) WHERE order_item_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
@@ -117,4 +140,4 @@ INSERT OR IGNORE INTO categories (id, name, slug) VALUES ('cat_sms', 'Aktivasi H
 
 -- Default admin user password: Admin123! (hash: SHA-256 with salt demo)
 INSERT OR IGNORE INTO users (id, email, password_hash, role) VALUES 
-('usr_admin', 'admin@digit-store.web.id', 'e9305df626c06a382c7d9e79435b67e81404c7d0d0ebc257850a182745cf0016:salt123', 'admin');
+('usr_admin', 'admin@digit-store.web.id', 'ad158336ed607824ac64bdf29c14e52f162cbffe2d4ee5a8ae3cb325ff4fcff9:salt123', 'admin');

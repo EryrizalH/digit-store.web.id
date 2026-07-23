@@ -1,6 +1,7 @@
+// ponytail: OrdersView component with per-item fulfilment status, OTP route details, and manual refund alerts
 import React, { useEffect, useState } from 'react';
 import { Order, OrderItem, FileEntitlement, OrderStockAllocation, SmsActivation } from '../types';
-import { Download, Key, Smartphone, Copy, Check, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Download, Key, Smartphone, Copy, Check, Clock, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { SmsActivationViewer } from './SmsActivationViewer';
 
 interface OrderDetailData {
@@ -57,13 +58,7 @@ export const OrdersView: React.FC = () => {
     }
   }, [selectedOrderId]);
 
-  const handleSimulatedPay = async (orderId: string) => {
-    const res = await fetch(`/api/orders/${orderId}/simulated-pay`, { method: 'POST' });
-    if (res.ok) {
-      fetchOrders();
-      fetchOrderDetail(orderId);
-    }
-  };
+
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -149,35 +144,46 @@ export const OrdersView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Pending Payment Action */}
-              {orderDetail.order.payment_status === 'pending' && (
-                <div className="p-4 bg-amber-950/40 border border-amber-800/50 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2 text-amber-200">
-                    <Clock className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span>Pembayaran masih pending. Klik simulasi bayar untuk menguji aktivasi otomatis.</span>
-                  </div>
-                  <button
-                    onClick={() => handleSimulatedPay(orderDetail.order.id)}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 text-white font-bold transition-all shadow-md"
-                  >
-                    Simulasi Bayar (Dev Test)
-                  </button>
-                </div>
-              )}
+
 
               {/* Order Items List */}
               <div>
                 <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Item Pesanan</h4>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {orderDetail.items.map((item) => (
-                    <div key={item.id} className="p-3.5 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-semibold text-white block">{item.product_name}</span>
-                        <span className="text-[10px] text-slate-400 uppercase">Tipe: {item.product_type}</span>
+                    <div key={item.id} className="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-2">
+                      <div className="flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <span className="font-bold text-white text-sm block">{item.product_name}</span>
+                          {item.product_type === 'herosms' && (item.service_code || item.service_name) && (
+                            <span className="text-xs font-semibold text-purple-300 block">
+                              Rute: {item.service_name || item.service_code} ({item.country_name || item.country_code})
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400 uppercase">Tipe: {item.product_type}</span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-slate-300 font-bold">{item.quantity}x</span>
+                          <span className="text-emerald-400 font-bold ml-2">{formatPrice(item.price)}</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-slate-300 font-bold">{item.quantity}x</span>
-                        <span className="text-emerald-400 font-bold ml-2">{formatPrice(item.price)}</span>
+
+                      {/* Per-item fulfilment status */}
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+                        <span className="text-slate-400">Status Pemenuhan Item:</span>
+                        {item.fulfilment_status === 'fulfilled' ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Terpenuhi
+                          </span>
+                        ) : item.fulfilment_status === 'failed' ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1" title={item.fulfilment_error || 'Gagal Terhubung Provider'}>
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Refund Manual Diperlukan ({item.fulfilment_error || 'Provider Error'})
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 animate-spin" /> Menunggu Pemrosesan
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -1,6 +1,7 @@
+// ponytail: CartDrawer with HeroSMS route info, dynamic item keys & 409 price change handling
 import React, { useState } from 'react';
-import { X, Trash2, Plus, Minus, CreditCard, ShieldCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { useCart } from '../context/CartContext';
+import { X, Trash2, Plus, Minus, CreditCard, ArrowRight, AlertCircle } from 'lucide-react';
+import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
 interface CartDrawerProps {
@@ -8,7 +9,7 @@ interface CartDrawerProps {
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
-  const { cart, isCartOpen, closeCart, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
+  const { cart, isCartOpen, closeCart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
   const { user, openAuthModal } = useAuth();
 
   const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit'>('midtrans');
@@ -41,7 +42,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
     try {
       const idempotencyKey = `idemp_${Date.now()}_${Math.random()}`;
       const payload = {
-        items: cart.map(item => ({ product_id: item.product.id, quantity: item.quantity })),
+        items: cart.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          service_code: item.serviceCode,
+          country_code: item.countryCode,
+          expires_at: item.expiresAt,
+          price: item.price !== undefined ? item.price : item.product.price
+        })),
         payment_provider: paymentProvider,
         idempotency_key: idempotencyKey,
         agreed_policy: agreedPolicy
@@ -54,6 +62,24 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
       });
 
       const data = (await res.json()) as any;
+
+      if (res.status === 409 || data.code === 'OTP_PRICE_CHANGED') {
+        const fresh = data.freshQuote;
+        if (fresh && fresh.serviceCode && fresh.countryCode && fresh.freshSellingPrice) {
+          const pId = fresh.productId || cart.find(i => i.serviceCode === fresh.serviceCode)?.product.id || '';
+          updateOtpQuote(pId, fresh.serviceCode, fresh.countryCode, {
+            price: fresh.freshSellingPrice,
+            expiresAt: fresh.expiresAt,
+            quoteId: fresh.quoteId
+          });
+          const formattedPrice = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(fresh.freshSellingPrice);
+          setError(`Harga OTP untuk rute ${fresh.serviceCode} (${fresh.countryCode}) telah diperbarui menjadi ${formattedPrice}. Silakan tekan tombol Checkout lagi untuk mengonfirmasi.`);
+        } else {
+          setError(data.error || 'Harga layanan OTP telah diperbarui. Silakan tekan Checkout lagi untuk konfirmasi.');
+        }
+        return;
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Checkout gagal');
       }
@@ -65,7 +91,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
         if (data.redirectUrl.startsWith('http')) {
           window.location.href = data.redirectUrl;
         } else {
-          // Simulated mock pay
           onSuccessOrder(data.orderId);
         }
       } else {
@@ -101,8 +126,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
           {/* Cart Items */}
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             {error && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs">
-                {error}
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
@@ -111,45 +137,64 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                 Keranjang Anda masih kosong.
               </div>
             ) : (
-              cart.map((item) => (
-                <div
-                  key={item.product.id}
-                  className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-slate-200 truncate">
-                      {item.product.name}
-                    </h4>
-                    <span className="text-xs font-bold text-emerald-400 block mt-0.5">
-                      {formatPrice(item.product.price)}
-                    </span>
-                  </div>
+              cart.map((item) => {
+                const itemKey = getCartItemKey(item);
+                const displayPrice = item.price !== undefined ? item.price : item.product.price;
 
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-xs font-bold text-white w-5 text-center">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 ml-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                return (
+                  <div
+                    key={itemKey}
+                    className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-slate-200 truncate">
+                        {item.product.name}
+                      </h4>
+                      {item.product.type === 'herosms' && (
+                        <p className="text-[11px] text-purple-300">
+                          {item.serviceName || item.serviceCode} ({item.countryName || item.countryCode})
+                        </p>
+                      )}
+                      <span className="text-xs font-bold text-emerald-400 block mt-0.5">
+                        {formatPrice(displayPrice)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {item.product.type === 'herosms' ? (
+                        <span className="text-xs font-bold text-purple-300 px-2 py-1 bg-purple-950/60 border border-purple-800/40 rounded-lg">
+                          1x
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => updateQuantity(itemKey, item.quantity - 1)}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs font-bold text-white w-5 text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(itemKey, item.quantity + 1)}
+                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => removeFromCart(itemKey)}
+                        className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 ml-1"
+                        title="Hapus Rute"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
 
             {cart.length > 0 && (

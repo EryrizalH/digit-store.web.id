@@ -1,4 +1,4 @@
-// ponytail: Webhooks endpoint for Midtrans, Xendit, and HeroSMS callbacks (idempotent + signature verification)
+// ponytail: Webhooks endpoint for Midtrans, Xendit, and HeroSMS callbacks (idempotent + safe retry on paid status)
 import { Hono } from 'hono';
 import { Env } from '../types';
 import { getPaymentGateway } from '../services/payments';
@@ -23,10 +23,10 @@ webhooksRouter.post('/midtrans', async (c) => {
     if (order.payment_status !== status) {
       await c.env.DB.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .bind(status, orderId).run();
+    }
 
-      if (status === 'paid') {
-        await fulfillOrder(orderId, order.user_id, c.env);
-      }
+    if (status === 'paid') {
+      await fulfillOrder(orderId, order.user_id, c.env);
     }
 
     return c.json({ status: 'OK' });
@@ -52,10 +52,10 @@ webhooksRouter.post('/xendit', async (c) => {
     if (order.payment_status !== status) {
       await c.env.DB.prepare('UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .bind(status, orderId).run();
+    }
 
-      if (status === 'paid') {
-        await fulfillOrder(orderId, order.user_id, c.env);
-      }
+    if (status === 'paid') {
+      await fulfillOrder(orderId, order.user_id, c.env);
     }
 
     return c.json({ status: 'OK' });
