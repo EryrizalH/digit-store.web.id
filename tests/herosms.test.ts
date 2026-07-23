@@ -22,6 +22,75 @@ describe('HeroSMS Client & Activations Router Tests', () => {
     });
   });
 
+  describe('HeroSmsClient Price Parsing Variants & Error Envelopes', () => {
+    const client = new HeroSmsClient('test_api_key', 'https://hero-sms.com/stubs/handler_api.php');
+
+    it('normalizes full country/service map shape', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        '0': { tg: { cost: 0.15, count: 100 } }
+      })));
+      const prices = await client.getPrices();
+      expect(prices).toEqual({
+        '0': { tg: { cost: 0.15, count: 100 } }
+      });
+    });
+
+    it('normalizes country-filtered service map when country option is passed', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        tg: { cost: 0.20, count: 50 }
+      })));
+      const prices = await client.getPrices('tg', '0');
+      expect(prices).toEqual({
+        '0': { tg: { cost: 0.20, count: 50 } }
+      });
+    });
+
+    it('normalizes service-filtered country map when service option is passed', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        '0': { cost: 0.25, count: 30 }
+      })));
+      const prices = await client.getPrices('tg');
+      expect(prices).toEqual({
+        '0': { tg: { cost: 0.25, count: 30 } }
+      });
+    });
+
+    it('normalizes single price object when country and service options are passed', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        cost: 0.12,
+        count: 40
+      })));
+      const prices = await client.getPrices('tg', '0');
+      expect(prices).toEqual({
+        '0': { tg: { cost: 0.12, count: 40 } }
+      });
+    });
+
+    it('detects provider JSON error envelopes and throws HeroSmsError', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        title: 'ERROR',
+        msg: 'BAD_KEY'
+      })));
+      await expect(client.getPrices()).rejects.toThrow(HeroSmsError);
+    });
+
+    it('normalizes provider currency ISO code 840 to USD', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        id: '12345',
+        phoneNumber: '+62812345678',
+        activationCost: 0.15,
+        currency: '840'
+      })));
+      const res = await client.getNumberV2('tg', '0');
+      expect(res.currency).toBe('USD');
+    });
+
+    it('throws HeroSmsError in production when HEROSMS_API_KEY is absent without allowMock', async () => {
+      const prodClient = new HeroSmsClient('', 'https://hero-sms.com/stubs/handler_api.php', false);
+      await expect(prodClient.getPrices()).rejects.toThrow(HeroSmsError);
+    });
+  });
+
   describe('HeroSmsClient Status Parsing & Errors', () => {
     const client = new HeroSmsClient('test_api_key', 'https://hero-sms.com/stubs/handler_api.php');
 

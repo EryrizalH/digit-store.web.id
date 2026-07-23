@@ -7,7 +7,7 @@ import { getPaymentGateway } from '../services/payments';
 import { fulfillOrder } from '../services/fulfilment';
 import { checkRateLimit } from '../services/rate-limit';
 import { HeroSmsClient } from '../services/herosms';
-import { getOtpSettings, calculateSellingPrice } from './otp';
+import { getOtpSettings, calculateSellingPrice, validateOtpSettings, createHeroSmsClient } from './otp';
 
 export const ordersRouter = new Hono<{ Bindings: Env; Variables: { user?: User } }>();
 
@@ -59,7 +59,7 @@ ordersRouter.post('/checkout', async (c) => {
     quote_id?: string | null;
   }> = [];
 
-  const heroClient = new HeroSmsClient(c.env.HEROSMS_API_KEY || '', c.env.HEROSMS_BASE_URL);
+  const heroClient = createHeroSmsClient(c.env);
 
   for (const item of items) {
     const productId = item.product_id || (item.product && item.product.id);
@@ -83,8 +83,13 @@ ordersRouter.post('/checkout', async (c) => {
       }
 
       const settings = await getOtpSettings(c.env.DB);
-      if (!settings || !settings.enabled || settings.rate <= 0) {
+      const v = validateOtpSettings(settings);
+      if (!v.valid) {
         return c.json({ error: 'Pengaturan harga OTP belum dikonfigurasi atau dinonaktifkan oleh admin.' }, 400);
+      }
+
+      if (!c.env.HEROSMS_API_KEY && c.env.APP_ENV !== 'development') {
+        return c.json({ error: 'Gagal memverifikasi katalog dari provider HeroSMS' }, 502);
       }
 
       const serviceCode = item.service_code || item.serviceCode;
@@ -122,7 +127,7 @@ ordersRouter.post('/checkout', async (c) => {
         const matchedCountry = countriesList.find((cItem: any) => String(cItem.id) === String(countryCode));
 
         if (!matchedService || !matchedCountry) {
-          if (c.env.HEROSMS_API_KEY) {
+          if (c.env.HEROSMS_API_KEY || c.env.APP_ENV !== 'development') {
             return c.json({ error: 'Gagal memverifikasi katalog dari provider HeroSMS' }, 502);
           }
         }
@@ -131,12 +136,12 @@ ordersRouter.post('/checkout', async (c) => {
         serviceName = matchedService?.name || String(serviceCode).toUpperCase();
         countryName = matchedCountry?.eng || (String(countryCode) === '0' ? 'Russia' : `Country ${countryCode}`);
       } catch {
-        if (c.env.HEROSMS_API_KEY) {
-          // Fail closed when configured API key lookup throws error
+        if (c.env.HEROSMS_API_KEY || c.env.APP_ENV !== 'development') {
+          // Fail closed when configured API key lookup throws error or missing config in prod
           return c.json({ error: 'Gagal memverifikasi katalog dari provider HeroSMS' }, 502);
         }
-        // Mock/no-key mode: server-owned mock values only
-        currentProviderCost = 10;
+        // Mock/no-key mode in dev: server-owned mock values only
+        currentProviderCost = 0.15;
         serviceName = String(serviceCode).toUpperCase();
         countryName = String(countryCode) === '0' ? 'Russia' : `Country ${countryCode}`;
       }

@@ -60,7 +60,7 @@ describe('Digital Store Unit & Integration Tests', () => {
   });
 
   it('should request and poll HeroSMS status correctly in mock mode', async () => {
-    const hero = new HeroSmsClient('', 'https://hero-sms.com/stubs/handler_api.php');
+    const hero = new HeroSmsClient('', 'https://hero-sms.com/stubs/handler_api.php', true);
     const req = await hero.requestNumber('tg', '0');
 
     expect(req.activationId).toBeDefined();

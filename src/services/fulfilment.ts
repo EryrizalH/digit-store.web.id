@@ -17,7 +17,9 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
     WHERE oi.order_id = ?
   `).bind(orderId).all<any>();
 
-  const heroClient = new HeroSmsClient(env.HEROSMS_API_KEY || '', env.HEROSMS_BASE_URL);
+  // ponytail: Only enable mock mode explicitly in development environment
+  const isDev = env.APP_ENV === 'development';
+  const heroClient = new HeroSmsClient(env.HEROSMS_API_KEY || '', env.HEROSMS_BASE_URL, isDev);
 
   for (const item of items.results || []) {
     // Skip both fulfilled and failed items so a provider failure is never retried automatically
@@ -134,7 +136,7 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
           service,
           country,
           res.activationCost ?? maxPrice ?? 0,
-          res.currency || 'RUB'
+          res.currency || 'USD'
         ).run();
 
         await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")

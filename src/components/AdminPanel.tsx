@@ -26,12 +26,12 @@ export const AdminPanel: React.FC = () => {
   const [bulkCodesText, setBulkCodesText] = useState('');
   const [stockMsg, setStockMsg] = useState('');
 
-  // OTP Pricing Settings form
+  // OTP Pricing Settings form (Explicit USD configuration)
   const [otpEnabled, setOtpEnabled] = useState(false);
-  const [providerCurrency, setProviderCurrency] = useState('RUB');
-  const [rate, setRate] = useState('200');
+  const [providerCurrency, setProviderCurrency] = useState('USD');
+  const [rate, setRate] = useState('16000');
   const [markupPercent, setMarkupPercent] = useState('20');
-  const [minSalePriceIdr, setMinSalePriceIdr] = useState('5000');
+  const [minSalePriceIdr, setMinSalePriceIdr] = useState('3000');
   const [savingOtpSettings, setSavingOtpSettings] = useState(false);
   const [otpMsg, setOtpMsg] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -59,10 +59,18 @@ export const AdminPanel: React.FC = () => {
         const data = (await res.json()) as any;
         if (data.settings) {
           setOtpEnabled(data.settings.enabled === 1);
-          setProviderCurrency(data.settings.provider_currency || 'RUB');
-          setRate(String(data.settings.rate || '200'));
-          setMarkupPercent(String(data.settings.markup_percent || '20'));
-          setMinSalePriceIdr(String(data.settings.min_price_idr || '5000'));
+          setProviderCurrency('USD');
+          setRate(String(data.settings.rate || '16000'));
+          setMarkupPercent(String(data.settings.markup_percent !== undefined ? data.settings.markup_percent : '20'));
+          setMinSalePriceIdr(String(data.settings.min_price_idr || '3000'));
+
+          if (
+            data.settings.provider_currency !== 'USD' ||
+            Number(data.settings.rate) <= 0 ||
+            Number(data.settings.min_price_idr) < 3000
+          ) {
+            setOtpError('Pengaturan OTP memerlukan pembaruan konfigurasi USD valid (Kurs > 0, Min IDR 3000). Silakan simpan.');
+          }
         }
       }
     } catch {
@@ -528,26 +536,26 @@ export const AdminPanel: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Mata Uang Provider</label>
+                <label className="text-slate-300 font-semibold block mb-1">Biaya HeroSMS (USD)</label>
                 <input
                   type="text"
-                  required
-                  value={providerCurrency}
-                  onChange={(e) => setProviderCurrency(e.target.value)}
-                  placeholder="RUB"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
+                  readOnly
+                  disabled
+                  value="USD"
+                  className="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-3 py-2.5 text-slate-400 min-h-[44px] font-mono cursor-not-allowed"
                 />
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Kurs Provider ke IDR (Rate)</label>
+                <label className="text-slate-300 font-semibold block mb-1">Kurs 1 USD ke IDR</label>
                 <input
                   type="number"
                   required
                   step="any"
+                  min="1"
                   value={rate}
                   onChange={(e) => setRate(e.target.value)}
-                  placeholder="200"
+                  placeholder="16000"
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
                 />
               </div>
@@ -555,11 +563,12 @@ export const AdminPanel: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Markup (%)</label>
+                <label className="text-slate-300 font-semibold block mb-1">Margin (%)</label>
                 <input
                   type="number"
                   required
                   step="any"
+                  min="0"
                   value={markupPercent}
                   onChange={(e) => setMarkupPercent(e.target.value)}
                   placeholder="20"
@@ -568,14 +577,15 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Harga Jual Minimum IDR</label>
+                <label className="text-slate-300 font-semibold block mb-1">Harga minimum IDR</label>
                 <input
                   type="number"
                   required
                   step="any"
+                  min="3000"
                   value={minSalePriceIdr}
                   onChange={(e) => setMinSalePriceIdr(e.target.value)}
-                  placeholder="5000"
+                  placeholder="3000"
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px] font-mono"
                 />
               </div>

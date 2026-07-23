@@ -1,5 +1,5 @@
 // ponytail: Dedicated HeroSMS OTP Configurator page with canonical URL /produk/herosms-otp-configurator
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Product, OtpQuote } from '../types';
 import { useCart } from '../context/CartContext';
@@ -17,9 +17,10 @@ export const HeroSmsPage: React.FC = () => {
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [addedNotice, setAddedNotice] = useState(false);
 
-  // OTP Configurator States
+  // OTP Configurator States - strict user-initiated selection flow
   const [services, setServices] = useState<Array<{ code: string; name: string }>>([]);
   const [countries, setCountries] = useState<Array<{ id: number; eng: string }>>([]);
+  const [countriesLoading, setCountriesLoading] = useState(false);
   const [selectedService, setSelectedService] = useState<string>('');
   const [selectedCountry, setSelectedCountry] = useState<string>('');
   const [serviceSearch, setServiceSearch] = useState('');
@@ -27,6 +28,10 @@ export const HeroSmsPage: React.FC = () => {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
+
+  // Async request trackers to prevent race conditions & stale responses
+  const countriesReqId = useRef(0);
+  const quoteReqId = useRef(0);
 
   const fetchProductDetail = async () => {
     setLoading(true);
@@ -51,11 +56,7 @@ export const HeroSmsPage: React.FC = () => {
       const sRes = await fetch('/api/otp/services');
       if (sRes.ok) {
         const sData = (await sRes.json()) as any;
-        const list = sData.services || [];
-        setServices(list);
-        if (list.length > 0) {
-          setSelectedService(list[0].code);
-        }
+        setServices(sData.services || []);
       }
     } catch {
       // ignore
@@ -63,38 +64,59 @@ export const HeroSmsPage: React.FC = () => {
   };
 
   const fetchOtpCountries = async (service: string) => {
-    if (!service) return;
-    try {
-      const cRes = await fetch(`/api/otp/countries?service=${encodeURIComponent(service)}`);
-      if (cRes.ok) {
-        const cData = (await cRes.json()) as any;
-        const list = cData.countries || [];
-        setCountries(list);
-        if (list.length > 0) {
-          setSelectedCountry(String(list[0].id));
-        } else {
-          setSelectedCountry('');
-          setQuote(null);
-        }
-      }
-    } catch {
+    // ponytail: Invalidate both countries and quote in-flight requests on service change
+    const reqId = ++countriesReqId.current;
+    quoteReqId.current++;
+
+    if (!service) {
       setCountries([]);
       setSelectedCountry('');
       setQuote(null);
+      setQuoteError(null);
+      setQuoteLoading(false);
+      setCountriesLoading(false);
+      setTimeLeft(0);
+      return;
+    }
+
+    setCountriesLoading(true);
+    try {
+      const cRes = await fetch(`/api/otp/countries?service=${encodeURIComponent(service)}`);
+      if (cRes.ok && reqId === countriesReqId.current) {
+        const cData = (await cRes.json()) as any;
+        setCountries(cData.countries || []);
+      }
+    } catch {
+      if (reqId === countriesReqId.current) {
+        setCountries([]);
+      }
+    } finally {
+      if (reqId === countriesReqId.current) {
+        setCountriesLoading(false);
+      }
     }
   };
 
   const fetchQuote = async (service: string, country: string) => {
-    if (!service || !country) {
+    // ponytail: Invalidate in-flight quote request on country/service change
+    const reqId = ++quoteReqId.current;
+
+    if (!service || country === undefined || country === null || country.trim() === '') {
       setQuote(null);
+      setQuoteError(null);
+      setQuoteLoading(false);
+      setTimeLeft(0);
       return;
     }
+
     setQuoteLoading(true);
     setQuoteError(null);
     setQuote(null);
     try {
       const res = await fetch(`/api/otp/quote?service=${encodeURIComponent(service)}&country=${encodeURIComponent(country)}`);
       const data = (await res.json()) as any;
+      if (reqId !== quoteReqId.current) return;
+
       if (!res.ok) {
         setQuoteError(data.error || 'Gagal mengambil kuotasi harga dari provider HeroSMS.');
         return;
@@ -104,33 +126,19 @@ export const HeroSmsPage: React.FC = () => {
         setTimeLeft(Math.max(0, Math.floor((data.quote.expiresAt - Date.now()) / 1000)));
       }
     } catch (err: any) {
-      setQuoteError(err.message || 'Terjadi kesalahan jaringan.');
+      if (reqId === quoteReqId.current) {
+        setQuoteError(err.message || 'Terjadi kesalahan jaringan.');
+      }
     } finally {
-      setQuoteLoading(false);
+      if (reqId === quoteReqId.current) {
+        setQuoteLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchProductDetail();
   }, []);
-
-  // On service change, clear old country, quote, and country list
-  useEffect(() => {
-    if (selectedService) {
-      setSelectedCountry('');
-      setQuote(null);
-      setCountries([]);
-      fetchOtpCountries(selectedService);
-    }
-  }, [selectedService]);
-
-  // Fetch quote only if selected country belongs to current service-filtered country list
-  useEffect(() => {
-    const isCountryValid = countries.some((c) => String(c.id) === selectedCountry);
-    if (selectedService && selectedCountry && isCountryValid) {
-      fetchQuote(selectedService, selectedCountry);
-    }
-  }, [selectedService, selectedCountry, countries]);
 
   // Quote timer countdown
   useEffect(() => {
@@ -269,15 +277,22 @@ export const HeroSmsPage: React.FC = () => {
                 value={selectedService}
                 onChange={(e) => {
                   const newService = e.target.value;
+                  countriesReqId.current++;
+                  quoteReqId.current++;
+                  setSelectedService(newService);
                   setSelectedCountry('');
                   setCountries([]);
                   setQuote(null);
                   setQuoteError(null);
+                  setQuoteLoading(false);
                   setTimeLeft(0);
-                  setSelectedService(newService);
+                  if (newService) {
+                    fetchOtpCountries(newService);
+                  }
                 }}
                 className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500"
               >
+                <option value="">-- Pilih Layanan / Aplikasi --</option>
                 {filteredServices.map((s) => (
                   <option key={s.code} value={s.code}>
                     {s.name} ({s.code})
@@ -291,18 +306,36 @@ export const HeroSmsPage: React.FC = () => {
               <label className="text-xs font-bold text-slate-300 block">Pilih Negara Nomor (Tersedia):</label>
               <select
                 value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
-                disabled={countries.length === 0}
+                onChange={(e) => {
+                  const newCountry = e.target.value;
+                  quoteReqId.current++;
+                  setSelectedCountry(newCountry);
+                  setQuote(null);
+                  setQuoteError(null);
+                  setQuoteLoading(false);
+                  setTimeLeft(0);
+                  if (selectedService && newCountry) {
+                    fetchQuote(selectedService, newCountry);
+                  }
+                }}
+                disabled={!selectedService || countriesLoading || countries.length === 0}
                 className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
               >
-                {countries.length === 0 ? (
-                  <option value="">Tidak ada negara yang tersedia</option>
+                {!selectedService ? (
+                  <option value="">-- Pilih Layanan Terlebih Dahulu --</option>
+                ) : countriesLoading ? (
+                  <option value="">Memuat daftar negara...</option>
+                ) : countries.length === 0 ? (
+                  <option value="">Tidak ada negara tersedia</option>
                 ) : (
-                  countries.map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.eng} (ID: {c.id})
-                    </option>
-                  ))
+                  <>
+                    <option value="">-- Pilih Negara Nomor --</option>
+                    {countries.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.eng} (ID: {c.id})
+                      </option>
+                    ))}
+                  </>
                 )}
               </select>
             </div>
@@ -313,8 +346,13 @@ export const HeroSmsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400 font-medium">Kuotasi Harga Real-time (IDR):</span>
               <button
-                onClick={() => fetchQuote(selectedService, selectedCountry)}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1"
+                onClick={() => {
+                  if (selectedService && selectedCountry) {
+                    fetchQuote(selectedService, selectedCountry);
+                  }
+                }}
+                disabled={!selectedService || !selectedCountry || quoteLoading}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-xs flex items-center gap-1"
                 title="Perbarui Kuotasi"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${quoteLoading ? 'animate-spin' : ''}`} /> Refresh
@@ -347,7 +385,15 @@ export const HeroSmsPage: React.FC = () => {
                   <span>Rute: {quote.serviceName} ({quote.countryName})</span>
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="text-xs text-slate-500 italic">
+                {!selectedService
+                  ? 'Silakan pilih layanan dan negara terlebih dahulu untuk melihat kuotasi harga.'
+                  : !selectedCountry
+                  ? 'Silakan pilih negara nomor untuk melihat kuotasi harga.'
+                  : 'Memuat kuotasi...'}
+              </div>
+            )}
           </div>
 
           {/* HeroSMS Policy Consent */}
@@ -394,7 +440,7 @@ export const HeroSmsPage: React.FC = () => {
 
           <button
             onClick={handleAddToCart}
-            disabled={!quote || !!quoteError || timeLeft === 0 || !policyAgreed}
+            disabled={!selectedService || !selectedCountry || !quote || !!quoteError || timeLeft === 0 || !policyAgreed}
             className="px-6 py-3.5 min-h-[44px] rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 disabled:opacity-40 text-white text-sm font-extrabold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <ShoppingBag className="w-5 h-5" />

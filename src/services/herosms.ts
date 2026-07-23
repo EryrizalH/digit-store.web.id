@@ -35,10 +35,12 @@ export interface HeroSmsCountryItem {
 export class HeroSmsClient {
   private apiKey: string;
   private baseUrl: string;
+  private allowMock: boolean;
 
-  constructor(apiKey: string, baseUrl: string = 'https://hero-sms.com/stubs/handler_api.php') {
+  constructor(apiKey: string, baseUrl: string = 'https://hero-sms.com/stubs/handler_api.php', allowMock: boolean = false) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
+    this.allowMock = allowMock;
   }
 
   // ponytail: Build safely encoded URL using URL & URLSearchParams
@@ -54,6 +56,9 @@ export class HeroSmsClient {
 
   async getServicesList(country?: string, lang: string = 'en'): Promise<HeroSmsServiceItem[]> {
     if (!this.apiKey) {
+      if (!this.allowMock) {
+        throw new HeroSmsError('CONFIG_ERROR', 'HeroSMS API key is not configured');
+      }
       return [
         { code: 'tg', name: 'Telegram' },
         { code: 'wa', name: 'WhatsApp' },
@@ -72,6 +77,11 @@ export class HeroSmsClient {
 
     try {
       const data = JSON.parse(text);
+      if (typeof data === 'object' && data !== null) {
+        if (data.title || data.error || data.msg) {
+          throw new HeroSmsError(data.title || data.error || data.msg, data.details || data.msg);
+        }
+      }
       if (Array.isArray(data)) return data;
       if (data.services && Array.isArray(data.services)) return data.services;
       if (typeof data === 'object') {
@@ -80,7 +90,8 @@ export class HeroSmsClient {
           name: typeof val === 'string' ? val : (val.name || code)
         }));
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof HeroSmsError) throw err;
       throw new HeroSmsError(text);
     }
     return [];
@@ -88,6 +99,9 @@ export class HeroSmsClient {
 
   async getCountries(): Promise<HeroSmsCountryItem[]> {
     if (!this.apiKey) {
+      if (!this.allowMock) {
+        throw new HeroSmsError('CONFIG_ERROR', 'HeroSMS API key is not configured');
+      }
       return [
         { id: 0, eng: 'Russia', rus: 'Россия', visible: 1 },
         { id: 2, eng: 'Kazakhstan', rus: 'Казахстан', visible: 1 },
@@ -102,6 +116,11 @@ export class HeroSmsClient {
 
     try {
       const data = JSON.parse(text);
+      if (typeof data === 'object' && data !== null) {
+        if (data.title || data.error || data.msg) {
+          throw new HeroSmsError(data.title || data.error || data.msg, data.details || data.msg);
+        }
+      }
       if (Array.isArray(data)) {
         return data.map((item: any) => ({
           id: Number(item.id),
@@ -118,7 +137,8 @@ export class HeroSmsClient {
           visible: val.visible !== undefined ? Number(val.visible) : 1
         }));
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof HeroSmsError) throw err;
       throw new HeroSmsError(text);
     }
     return [];
@@ -126,18 +146,21 @@ export class HeroSmsClient {
 
   async getPrices(service?: string, country?: string): Promise<Record<string, Record<string, { cost: number; count: number }>>> {
     if (!this.apiKey) {
+      if (!this.allowMock) {
+        throw new HeroSmsError('CONFIG_ERROR', 'HeroSMS API key is not configured');
+      }
       return {
         '0': {
-          tg: { cost: 15, count: 100 },
-          wa: { cost: 20, count: 50 },
-          go: { cost: 10, count: 200 }
+          tg: { cost: 0.15, count: 100 },
+          wa: { cost: 0.20, count: 50 },
+          go: { cost: 0.10, count: 200 }
         },
         '2': {
-          tg: { cost: 12, count: 40 },
-          wa: { cost: 18, count: 30 }
+          tg: { cost: 0.12, count: 40 },
+          wa: { cost: 0.18, count: 30 }
         },
         '6': {
-          tg: { cost: 25, count: 10 }
+          tg: { cost: 0.25, count: 10 }
         }
       };
     }
@@ -150,29 +173,65 @@ export class HeroSmsClient {
     if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     const text = (await res.text()).trim();
 
+    if (!text || text === '{}') return {};
+
     try {
       const data = JSON.parse(text);
+      if (typeof data !== 'object' || data === null) {
+        throw new HeroSmsError(text);
+      }
+      if (data.title || data.error || data.msg) {
+        throw new HeroSmsError(data.title || data.error || data.msg, data.details || data.msg);
+      }
+
       const result: Record<string, Record<string, { cost: number; count: number }>> = {};
 
-      // Standard response format: { [countryId]: { [serviceCode]: { cost|price: number, count: number } } }
-      // Or array or nested map
-      for (const [cId, sMap] of Object.entries(data)) {
-        if (typeof sMap === 'object' && sMap !== null) {
-          result[cId] = {};
-          for (const [sCode, info] of Object.entries(sMap as Record<string, any>)) {
-            if (typeof info === 'object' && info !== null) {
-              // Extract cost/price
-              const cost = Number(info.cost ?? info.price ?? info.min ?? (typeof info.prices === 'object' ? info.prices.default : 0));
-              const count = Number(info.count ?? (typeof info.counts === 'object' ? info.counts.total : 0));
-              result[cId][sCode] = { cost, count };
-            } else if (typeof info === 'number') {
-              result[cId][sCode] = { cost: info, count: 1 };
+      // Check if data is a single price object: { cost|price: number, count?: number }
+      if ((data.cost !== undefined || data.price !== undefined) && typeof data.cost !== 'object' && typeof data.price !== 'object') {
+        if (country && service) {
+          const cost = Number(data.cost ?? data.price ?? 0);
+          const count = Number(data.count ?? 1);
+          result[country] = { [service]: { cost, count } };
+          return result;
+        }
+      }
+
+      // Process object entries
+      for (const [key, value] of Object.entries(data)) {
+        if (typeof value === 'object' && value !== null) {
+          const valObj = value as Record<string, any>;
+          if (valObj.cost !== undefined || valObj.price !== undefined) {
+            const cost = Number(valObj.cost ?? valObj.price ?? 0);
+            const count = Number(valObj.count ?? 1);
+
+            if (country) {
+              // key is service code, e.g. data = { tg: { cost: 0.15, count: 100 } }
+              if (!result[country]) result[country] = {};
+              result[country][key] = { cost, count };
+            } else if (service) {
+              // key is country ID, e.g. data = { "0": { cost: 0.15, count: 100 } }
+              if (!result[key]) result[key] = {};
+              result[key][service] = { cost, count };
+            }
+          } else {
+            // Standard nested map: key is country ID, value is { [serviceCode]: { cost|price, count } }
+            result[key] = {};
+            for (const [sCode, info] of Object.entries(valObj)) {
+              if (typeof info === 'object' && info !== null) {
+                const cost = Number(info.cost ?? info.price ?? info.min ?? (typeof info.prices === 'object' ? info.prices.default : 0));
+                const count = Number(info.count ?? (typeof info.counts === 'object' ? info.counts.total : 0));
+                result[key][sCode] = { cost, count };
+              } else if (typeof info === 'number') {
+                result[key][sCode] = { cost: info, count: 1 };
+              }
             }
           }
         }
       }
+
       return result;
-    } catch {
+    } catch (err) {
+      if (err instanceof HeroSmsError) throw err;
       throw new HeroSmsError(text);
     }
   }
@@ -183,10 +242,12 @@ export class HeroSmsClient {
 
   async getNumberV2(service: string, country: string = '0', maxPrice?: number): Promise<HerosmsNumberResponse> {
     if (!this.apiKey) {
-      // Mock mode for local dev / testing
+      if (!this.allowMock) {
+        throw new HeroSmsError('CONFIG_ERROR', 'HeroSMS API key is not configured');
+      }
       const mockId = `act_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
       const mockPhone = `+628${Math.floor(100000000 + Math.random() * 900000000)}`;
-      return { activationId: mockId, phone: mockPhone, activationCost: maxPrice || 10, currency: 'RUB' };
+      return { activationId: mockId, phone: mockPhone, activationCost: maxPrice || 0.15, currency: 'USD' };
     }
 
     const params: Record<string, string> = { service, country };
@@ -205,11 +266,13 @@ export class HeroSmsClient {
       try {
         const json = JSON.parse(text);
         if (json.activationId || json.id) {
+          const rawCurrency = json.currency ? String(json.currency).toUpperCase() : 'USD';
+          const currency = (rawCurrency === '840' || rawCurrency === 'USD') ? 'USD' : rawCurrency;
           return {
             activationId: String(json.activationId || json.id),
             phone: String(json.phoneNumber || json.phone || ''),
             activationCost: json.activationCost !== undefined ? Number(json.activationCost) : (json.cost !== undefined ? Number(json.cost) : undefined),
-            currency: json.currency ? String(json.currency) : 'RUB'
+            currency
           };
         }
         if (json.title || json.error || json.msg) {
@@ -224,7 +287,8 @@ export class HeroSmsClient {
       const parts = text.split(':');
       return {
         activationId: parts[1],
-        phone: parts[2]
+        phone: parts[2],
+        currency: 'USD'
       };
     }
 
@@ -234,6 +298,9 @@ export class HeroSmsClient {
 
   async getStatus(activationId: string): Promise<HerosmsStatusResponse> {
     if (!this.apiKey || activationId.startsWith('act_')) {
+      if (!this.apiKey && !this.allowMock && !activationId.startsWith('act_')) {
+        throw new HeroSmsError('CONFIG_ERROR', 'HeroSMS API key is not configured');
+      }
       // Mock status check: simulate SMS arriving after ~15s
       const ageMs = Date.now() - parseInt(activationId.split('_')[1] || '0', 10);
       if (ageMs > 120000) {
@@ -317,7 +384,12 @@ export class HeroSmsClient {
   }
 
   async getBalance(): Promise<string> {
-    if (!this.apiKey) return '0.00 (mock)';
+    if (!this.apiKey) {
+      if (!this.allowMock) {
+        throw new HeroSmsError('CONFIG_ERROR', 'HeroSMS API key is not configured');
+      }
+      return '0.00 (mock)';
+    }
     const url = this.buildUrl('getBalance');
     const res = await fetch(url);
     if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
