@@ -37,7 +37,7 @@ export const AdminPanel: React.FC = () => {
   const [otpError, setOtpError] = useState<string | null>(null);
 
   const fetchProducts = async () => {
-    const res = await fetch('/api/products');
+    const res = await fetch('/api/products?include_all=1');
     if (res.ok) {
       const data = (await res.json()) as any;
       setProducts(data.products || []);

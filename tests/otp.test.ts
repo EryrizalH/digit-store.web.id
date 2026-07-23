@@ -4,6 +4,7 @@ import { HeroSmsClient, HeroSmsError } from '../src/services/herosms';
 import { calculateSellingPrice, otpRouter } from '../src/api/otp';
 import { ordersRouter } from '../src/api/orders';
 import { activationsRouter } from '../src/api/activations';
+import { productsRouter } from '../src/api/products';
 import { fulfillOrder } from '../src/services/fulfilment';
 import { sanitizeCartItem } from '../src/context/CartContext';
 
@@ -287,6 +288,88 @@ describe('HeroSMS OTP Configurator & End-to-End Suite', () => {
 
       const res = await ordersRouter.fetch(req, mockEnv);
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('HeroSMS Product Catalog Hiding & Canonical Route', () => {
+    it('hides herosms products from normal public catalog GET /', async () => {
+      const mockEnv: any = {
+        DB: {
+          prepare: vi.fn().mockImplementation((query: string) => {
+            expect(query).toContain("p.type != 'herosms'");
+            return {
+              all: vi.fn().mockResolvedValue({
+                results: [
+                  { id: 'p1', name: 'Software', slug: 'sw', price: 10000, type: 'file', is_active: 1 }
+                ]
+              })
+            };
+          })
+        }
+      };
+
+      const req = new Request('http://localhost/');
+      const res = await productsRouter.fetch(req, mockEnv);
+      expect(res.status).toBe(200);
+      const json = await res.json() as any;
+      expect(json.products).toHaveLength(1);
+      expect(json.products[0].type).toBe('file');
+    });
+
+    it('resolves canonical route /api/products/by-slug/herosms-otp-configurator with real backing product', async () => {
+      const mockEnv: any = {
+        DB: {
+          prepare: vi.fn().mockImplementation((query: string) => ({
+            bind: vi.fn().mockReturnThis(),
+            first: vi.fn().mockImplementation(async () => {
+              if (query.includes("WHERE p.type = 'herosms'")) {
+                return {
+                  id: 'prd_real_herosms',
+                  category_id: 'cat_sms',
+                  name: 'HeroSMS OTP Active Product',
+                  slug: 'herosms-otp-active',
+                  description: 'Real backing HeroSMS product',
+                  price: 0,
+                  type: 'herosms',
+                  image_key: null,
+                  herosms_service: null,
+                  herosms_country: null,
+                  is_active: 1,
+                  created_at: '2026-01-01T00:00:00Z',
+                  category_name: 'Aktivasi HeroSMS',
+                  stock_count: 0
+                };
+              }
+              return null;
+            })
+          }))
+        }
+      };
+
+      const req = new Request('http://localhost/by-slug/herosms-otp-configurator');
+      const res = await productsRouter.fetch(req, mockEnv);
+      expect(res.status).toBe(200);
+      const json = await res.json() as any;
+      expect(json.product).toBeDefined();
+      expect(json.product.id).toBe('prd_real_herosms');
+      expect(json.product.type).toBe('herosms');
+    });
+
+    it('returns 404 when no active backing HeroSMS product exists in DB', async () => {
+      const mockEnv: any = {
+        DB: {
+          prepare: vi.fn().mockImplementation(() => ({
+            bind: vi.fn().mockReturnThis(),
+            first: vi.fn().mockResolvedValue(null)
+          }))
+        }
+      };
+
+      const req = new Request('http://localhost/by-slug/herosms-otp-configurator');
+      const res = await productsRouter.fetch(req, mockEnv);
+      expect(res.status).toBe(404);
+      const json = await res.json() as any;
+      expect(json.error).toBe('Product not found');
     });
   });
 });

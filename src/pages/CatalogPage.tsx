@@ -42,7 +42,8 @@ export const CatalogPage: React.FC = () => {
       if (!res.ok) throw new Error('Gagal memuat produk dari server.');
 
       const data = (await res.json()) as any;
-      setProducts(data.products || []);
+      const rawProducts: Product[] = data.products || [];
+      setProducts(rawProducts.filter((p) => p.type !== 'herosms'));
     } catch (err: any) {
       setError(err.message || 'Terjadi kesalahan jaringan');
     } finally {
@@ -67,6 +68,8 @@ export const CatalogPage: React.FC = () => {
     }
     setSearchParams(newParams);
   };
+
+  const visibleCategories = categories.filter((cat) => cat.slug !== 'herosms-activation');
 
   return (
     <main className="flex-1 max-w-7xl w-full mx-auto py-6 sm:py-8 px-4 lg:px-8 space-y-8 pb-safe">
@@ -133,7 +136,7 @@ export const CatalogPage: React.FC = () => {
         >
           Semua Produk
         </button>
-        {categories.map((cat) => (
+        {visibleCategories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => handleSelectCategory(cat.slug)}

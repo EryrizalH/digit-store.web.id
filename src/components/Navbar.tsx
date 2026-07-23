@@ -1,7 +1,7 @@
 // ponytail: Mobile-first Navbar with strict 44x44px touch targets down to 320px viewport, text compacting & aria-labels
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, LogOut, ShieldCheck, KeyRound, Search, X } from 'lucide-react';
+import { ShoppingBag, User, LogOut, ShieldCheck, KeyRound, Search, X, Smartphone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -101,6 +101,21 @@ export const Navbar: React.FC = () => {
             }`}
           >
             Katalog
+          </Link>
+
+          {/* HeroSMS OTP Link — responsive & keyboard-accessible with 44px touch target on mobile */}
+          <Link
+            to="/produk/herosms-otp-configurator"
+            aria-label="HeroSMS OTP"
+            title="HeroSMS OTP"
+            className={`w-11 h-11 sm:w-auto sm:px-3.5 sm:min-h-[44px] text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 focus-visible:ring-2 focus-visible:ring-purple-500 ${
+              location.pathname === '/produk/herosms-otp-configurator'
+                ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30 font-bold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Smartphone className="w-5 h-5 sm:w-4 sm:h-4 text-purple-400" />
+            <span className="hidden sm:inline">HeroSMS OTP</span>
           </Link>
 
           {user && (

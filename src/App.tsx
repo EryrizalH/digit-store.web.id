@@ -7,6 +7,7 @@ import { Navbar } from './components/Navbar';
 import { RefreshCw } from 'lucide-react';
 
 const CatalogPage = React.lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })));
+const HeroSmsPage = React.lazy(() => import('./pages/HeroSmsPage').then(m => ({ default: m.HeroSmsPage })));
 const ProductDetailPage = React.lazy(() => import('./pages/ProductDetailPage').then(m => ({ default: m.ProductDetailPage })));
 const CartPage = React.lazy(() => import('./pages/CartPage').then(m => ({ default: m.CartPage })));
 const AuthPage = React.lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
@@ -28,6 +29,7 @@ export const AppContent: React.FC = () => {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<CatalogPage />} />
+          <Route path="/produk/herosms-otp-configurator" element={<HeroSmsPage />} />
           <Route path="/produk/:slug" element={<ProductDetailPage />} />
           <Route path="/keranjang" element={<CartPage />} />
           <Route path="/masuk" element={<AuthPage initialMode="login" />} />

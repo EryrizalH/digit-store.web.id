@@ -43,9 +43,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     }
   };
 
+  const targetUrl = product.type === 'herosms' ? '/produk/herosms-otp-configurator' : `/produk/${product.slug}`;
+
   const handleAction = () => {
     if (product.type === 'herosms') {
-      navigate(`/produk/${product.slug}`);
+      navigate('/produk/herosms-otp-configurator');
     } else {
       addToCart(product);
     }
@@ -55,7 +57,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     <div className="glass-card rounded-2xl p-4 flex flex-col justify-between relative group border border-slate-800/80 hover:border-indigo-500/40 transition-all">
       <div className="space-y-3">
         {/* Reserved Aspect Ratio Artwork */}
-        <Link to={`/produk/${product.slug}`} className="block focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl overflow-hidden">
+        <Link to={targetUrl} className="block focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl overflow-hidden">
           <ArtworkImage
             src={product.artwork_url}
             alt={product.name}
@@ -80,7 +82,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
         {/* Title */}
         <Link
-          to={`/produk/${product.slug}`}
+          to={targetUrl}
           className="text-base font-bold text-white hover:text-indigo-300 transition-colors line-clamp-2 block focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
         >
           {product.name}
@@ -102,7 +104,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
         <div className="flex items-center gap-2">
           <Link
-            to={`/produk/${product.slug}`}
+            to={targetUrl}
             className="px-3 min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             {product.type === 'herosms' ? 'Konfigurasi' : 'Detail'}

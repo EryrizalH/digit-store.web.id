@@ -48,6 +48,7 @@ productsRouter.get('/categories', async (c) => {
 productsRouter.get('/', async (c) => {
   const categorySlug = c.req.query('category');
   const search = c.req.query('q');
+  const includeAll = c.req.query('include_all') === '1';
 
   let query = `
     SELECT p.id, p.category_id, p.name, p.slug, p.description, p.price, p.type, p.image_key, p.herosms_service, p.herosms_country, p.is_active, p.created_at,
@@ -59,6 +60,9 @@ productsRouter.get('/', async (c) => {
   `;
   const params: any[] = [];
 
+  if (!includeAll) {
+    query += ` AND p.type != 'herosms'`;
+  }
   if (categorySlug) {
     query += ` AND c.slug = ?`;
     params.push(categorySlug);
@@ -103,7 +107,7 @@ productsRouter.get('/:slug/artwork', async (c) => {
 // Get Product Detail by Slug
 productsRouter.get('/by-slug/:slug', async (c) => {
   const slug = c.req.param('slug');
-  const product = await c.env.DB.prepare(`
+  let product = await c.env.DB.prepare(`
     SELECT p.id, p.category_id, p.name, p.slug, p.description, p.price, p.type, p.image_key, p.herosms_service, p.herosms_country, p.is_active, p.created_at,
       c.name as category_name,
       (SELECT COUNT(*) FROM stock_codes sc WHERE sc.product_id = p.id AND sc.is_used = 0) as stock_count
@@ -111,6 +115,18 @@ productsRouter.get('/by-slug/:slug', async (c) => {
     LEFT JOIN categories c ON p.category_id = c.id
     WHERE p.slug = ? AND p.is_active = 1
   `).bind(slug).first();
+
+  if (!product && slug === 'herosms-otp-configurator') {
+    product = await c.env.DB.prepare(`
+      SELECT p.id, p.category_id, p.name, p.slug, p.description, p.price, p.type, p.image_key, p.herosms_service, p.herosms_country, p.is_active, p.created_at,
+        c.name as category_name,
+        (SELECT COUNT(*) FROM stock_codes sc WHERE sc.product_id = p.id AND sc.is_used = 0) as stock_count
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.type = 'herosms' AND p.is_active = 1
+      LIMIT 1
+    `).first();
+  }
 
   if (!product) return c.json({ error: 'Product not found' }, 404);
   return c.json({ product: formatPublicProduct(product) });
