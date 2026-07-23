@@ -1,14 +1,16 @@
+// ponytail: Compact artwork-led Product Card component with accessible touch targets & zero layout shift
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Product } from '../types';
-import { Download, Key, Smartphone, ShoppingCart, CheckCircle2 } from 'lucide-react';
+import { Download, Key, Smartphone, ShoppingCart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { ArtworkImage } from './ArtworkImage';
 
 interface ProductCardProps {
   product: Product;
-  onSelectProduct: (p: Product) => void;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelectProduct }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart } = useCart();
 
   const formatPrice = (price: number) => {
@@ -20,19 +22,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelectProdu
       case 'file':
         return (
           <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1">
-            <Download className="w-3.5 h-3.5" /> File Software
+            <Download className="w-3.5 h-3.5" /> File
           </span>
         );
       case 'code':
         return (
           <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-            <Key className="w-3.5 h-3.5" /> Lisensi / Code
+            <Key className="w-3.5 h-3.5" /> Lisensi
           </span>
         );
       case 'herosms':
         return (
           <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1">
-            <Smartphone className="w-3.5 h-3.5" /> HeroSMS OTP
+            <Smartphone className="w-3.5 h-3.5" /> HeroSMS
           </span>
         );
       default:
@@ -41,56 +43,70 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelectProdu
   };
 
   return (
-    <div className="glass-card rounded-2xl p-5 flex flex-col justify-between relative group">
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-3">
+    <div className="glass-card rounded-2xl p-4 flex flex-col justify-between relative group border border-slate-800/80 hover:border-indigo-500/40 transition-all">
+      <div className="space-y-3">
+        {/* Reserved Aspect Ratio Artwork */}
+        <Link to={`/produk/${product.slug}`} className="block focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl overflow-hidden">
+          <ArtworkImage
+            src={product.artwork_url}
+            alt={product.name}
+            type={product.type}
+            aspectRatio="aspect-[16/9]"
+          />
+        </Link>
+
+        {/* Badges & Stock */}
+        <div className="flex items-center justify-between gap-2">
           {getTypeBadge()}
           {product.type === 'code' && (
             <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
               (product.stock_count || 0) > 0
-                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                : 'bg-rose-950 text-rose-300 border border-rose-800'
+                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                : 'bg-rose-950/80 text-rose-300 border border-rose-800'
             }`}>
               Stok: {product.stock_count ?? 0}
             </span>
           )}
         </div>
 
-        <h3
-          onClick={() => onSelectProduct(product)}
-          className="text-lg font-bold text-slate-100 hover:text-indigo-300 cursor-pointer transition-colors line-clamp-2 mb-2"
+        {/* Title */}
+        <Link
+          to={`/produk/${product.slug}`}
+          className="text-base font-bold text-white hover:text-indigo-300 transition-colors line-clamp-2 block focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
         >
           {product.name}
-        </h3>
+        </Link>
 
-        <p className="text-xs text-slate-400 line-clamp-3 mb-4 leading-relaxed">
+        <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
           {product.description || 'Tidak ada deskripsi produk.'}
         </p>
       </div>
 
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between gap-3">
+      {/* Pricing & Add to Cart */}
+      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-3">
         <div>
           <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Harga</span>
-          <span className="text-lg font-extrabold text-white bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text">
+          <span className="text-base font-extrabold text-white">
             {formatPrice(product.price)}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onSelectProduct(product)}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all"
+          <Link
+            to={`/produk/${product.slug}`}
+            className="px-3 min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             Detail
-          </button>
+          </Link>
 
           <button
             onClick={() => addToCart(product)}
             disabled={product.type === 'code' && (product.stock_count || 0) <= 0}
-            className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center"
+            className="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
             title="Tambah ke Keranjang"
+            aria-label="Tambah ke Keranjang"
           >
-            <ShoppingCart className="w-4 h-4" />
+            <ShoppingCart className="w-5 h-5" />
           </button>
         </div>
       </div>

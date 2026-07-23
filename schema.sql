@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS products (
   price REAL NOT NULL,
   type TEXT NOT NULL, -- 'file' | 'code' | 'herosms'
   r2_key TEXT,
+  image_key TEXT,
   herosms_service TEXT,
   herosms_country TEXT,
   is_active INTEGER DEFAULT 1,

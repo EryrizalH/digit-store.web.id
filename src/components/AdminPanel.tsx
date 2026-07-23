@@ -1,9 +1,10 @@
+// ponytail: Admin Panel with minimal artwork upload affordance per requirement
 import React, { useState, useEffect } from 'react';
 import { Product, Category } from '../types';
-import { Plus, Upload, Key, Package, ShieldCheck, Database, FileText } from 'lucide-react';
+import { Plus, Upload, Key, Package, ShieldCheck, Image as ImageIcon } from 'lucide-react';
 
 export const AdminPanel: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'products' | 'stock' | 'orders'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'stock'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   
@@ -18,6 +19,7 @@ export const AdminPanel: React.FC = () => {
   const [herosmsService, setHerosmsService] = useState('tg');
   const [herosmsCountry, setHerosmsCountry] = useState('0');
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadingArtworkId, setUploadingArtworkId] = useState<string | null>(null);
 
   // Bulk stock form
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -69,6 +71,30 @@ export const AdminPanel: React.FC = () => {
       alert(err.message);
     } finally {
       setUploadingFile(false);
+    }
+  };
+
+  const handleArtworkUpload = async (productId: string, file: File) => {
+    setUploadingArtworkId(productId);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch(`/api/products/admin/${productId}/artwork`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = (await res.json()) as any;
+      if (data.success) {
+        alert('Artwork produk berhasil diunggah!');
+        fetchProducts();
+      } else {
+        alert(data.error || 'Upload artwork gagal');
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUploadingArtworkId(null);
     }
   };
 
@@ -140,7 +166,7 @@ export const AdminPanel: React.FC = () => {
         <div className="flex gap-2 bg-slate-900 p-1 rounded-2xl border border-slate-800">
           <button
             onClick={() => setActiveTab('products')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
               activeTab === 'products' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -148,7 +174,7 @@ export const AdminPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('stock')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
               activeTab === 'stock' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -174,7 +200,7 @@ export const AdminPanel: React.FC = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Contoh: Canva Pro 1 Tahun / Source Code React"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white min-h-[44px]"
                 />
               </div>
 
@@ -184,7 +210,7 @@ export const AdminPanel: React.FC = () => {
                   <select
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white min-h-[44px]"
                   >
                     <option value="">Pilih Kategori</option>
                     {categories.map((c) => (
@@ -198,7 +224,7 @@ export const AdminPanel: React.FC = () => {
                   <select
                     value={type}
                     onChange={(e: any) => setType(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white min-h-[44px]"
                   >
                     <option value="code">Code / Voucher</option>
                     <option value="file">File (Cloudflare R2)</option>
@@ -215,7 +241,7 @@ export const AdminPanel: React.FC = () => {
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="50000"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white min-h-[44px]"
                 />
               </div>
 
@@ -269,7 +295,7 @@ export const AdminPanel: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md min-h-[44px]"
               >
                 Simpan Produk
               </button>
@@ -286,19 +312,49 @@ export const AdminPanel: React.FC = () => {
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-900 text-slate-400 uppercase font-bold">
                   <tr>
+                    <th className="p-3">Artwork</th>
                     <th className="p-3">Nama</th>
                     <th className="p-3">Tipe</th>
                     <th className="p-3">Harga</th>
-                    <th className="p-3">Stok Kode</th>
+                    <th className="p-3">Stok</th>
+                    <th className="p-3">Aksi Artwork</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   {products.map((p) => (
                     <tr key={p.id} className="hover:bg-slate-900/40">
+                      <td className="p-3">
+                        {p.artwork_url ? (
+                          <img
+                            src={p.artwork_url}
+                            alt={p.name}
+                            className="w-10 h-10 object-cover rounded-lg border border-slate-700"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                            <ImageIcon className="w-5 h-5" />
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 font-semibold text-white">{p.name}</td>
                       <td className="p-3 uppercase font-bold text-slate-400">{p.type}</td>
                       <td className="p-3 font-mono text-emerald-400">Rp {p.price.toLocaleString()}</td>
                       <td className="p-3 font-bold text-indigo-300">{p.stock_count ?? '-'}</td>
+                      <td className="p-3">
+                        <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-500 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-all">
+                          <Upload className="w-3.5 h-3.5" />
+                          {uploadingArtworkId === p.id ? 'Uploading...' : p.artwork_url ? 'Replace' : 'Upload'}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/avif"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleArtworkUpload(p.id, f);
+                            }}
+                          />
+                        </label>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -327,7 +383,7 @@ export const AdminPanel: React.FC = () => {
                 required
                 value={selectedProductId}
                 onChange={(e) => setSelectedProductId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-white min-h-[44px]"
               >
                 <option value="">Pilih Produk</option>
                 {products.filter(p => p.type === 'code').map(p => (
@@ -350,7 +406,7 @@ export const AdminPanel: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md"
+              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all shadow-md min-h-[44px]"
             >
               Upload Stok Kode
             </button>

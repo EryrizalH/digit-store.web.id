@@ -60,6 +60,8 @@ export interface Product {
   price: number;
   type: ProductType;
   r2_key?: string | null;
+  image_key?: string | null;
+  artwork_url?: string | null;
   herosms_service?: string | null;
   herosms_country?: string | null;
   is_active: number;
