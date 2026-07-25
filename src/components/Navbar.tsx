@@ -1,7 +1,7 @@
 // ponytail: Mobile-first Navbar with strict 44x44px touch targets down to 320px viewport, text compacting & aria-labels
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, LogOut, ShieldCheck, KeyRound, Search, X, Smartphone } from 'lucide-react';
+import { ShoppingBag, User, LogOut, ShieldCheck, KeyRound, Search, X, Smartphone, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -14,6 +14,23 @@ export const Navbar: React.FC = () => {
 
   const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+
+  // Fetch credit balance when user is logged in
+  useEffect(() => {
+    if (user) {
+      fetch('/api/credits/balance')
+        .then(res => res.ok ? res.json() : null)
+        .then((data: any) => {
+          if (data && typeof data.balance === 'number') {
+            setCreditBalance(data.balance);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setCreditBalance(null);
+    }
+  }, [user]);
 
   // Sync search input state when URL searchParam changes
   useEffect(() => {
@@ -147,6 +164,25 @@ export const Navbar: React.FC = () => {
             >
               <ShieldCheck className="w-5 h-5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Admin</span>
+            </Link>
+          )}
+
+          {/* Credit Balance Badge */}
+          {user && creditBalance !== null && (
+            <Link
+              to="/topup"
+              aria-label="Saldo Kredit"
+              title="Saldo Kredit"
+              className={`h-11 px-2.5 sm:px-3.5 min-h-[44px] text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 border ${
+                location.pathname === '/topup'
+                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
+                  : 'border-slate-800 bg-slate-900 text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/5'
+              }`}
+            >
+              <Wallet className="w-4 h-4" />
+              <span className="text-[11px] sm:text-xs font-black">
+                {new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 0 }).format(creditBalance)}
+              </span>
             </Link>
           )}
 

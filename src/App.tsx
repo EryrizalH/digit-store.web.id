@@ -13,6 +13,9 @@ const CartPage = React.lazy(() => import('./pages/CartPage').then(m => ({ defaul
 const AuthPage = React.lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));
 const OrdersPage = React.lazy(() => import('./pages/OrdersPage').then(m => ({ default: m.OrdersPage })));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const TopupPage = React.lazy(() => import('./pages/TopupPage').then(m => ({ default: m.TopupPage })));
+const TopupSuccessPage = React.lazy(() => import('./pages/TopupSuccessPage').then(m => ({ default: m.TopupSuccessPage })));
+const TopupCancelPage = React.lazy(() => import('./pages/TopupCancelPage').then(m => ({ default: m.TopupCancelPage })));
 
 const PageFallback: React.FC = () => (
   <div className="flex-1 flex items-center justify-center py-24 text-slate-400 text-xs">
@@ -36,6 +39,9 @@ export const AppContent: React.FC = () => {
           <Route path="/daftar" element={<AuthPage initialMode="register" />} />
           <Route path="/pesanan" element={<OrdersPage />} />
           <Route path="/pesanan/:id" element={<OrdersPage />} />
+          <Route path="/topup" element={<TopupPage />} />
+          <Route path="/topup/success" element={<TopupSuccessPage />} />
+          <Route path="/topup/cancel" element={<TopupCancelPage />} />
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
