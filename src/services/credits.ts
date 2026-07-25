@@ -48,18 +48,17 @@ export async function debitCredit(
   referenceId?: string,
   description?: string
 ): Promise<{ success: boolean; transaction?: CreditTransaction; error?: string }> {
-  const currentBalance = await getBalance(db, userId);
+  // Atomic check-and-decrement: only succeeds if balance >= amount
+  const result = await db.prepare(`
+    UPDATE user_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = ? AND balance >= ?
+  `).bind(amount, userId, amount).run();
 
-  if (currentBalance < amount) {
+  if (!result.meta.changes || result.meta.changes === 0) {
     return { success: false, error: 'Insufficient credit balance' };
   }
 
   const txnId = `crtx_${crypto.randomUUID()}`;
-
-  // Deduct balance
-  await db.prepare(`
-    UPDATE user_credits SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?
-  `).bind(amount, userId).run();
 
   // Insert debit transaction
   await db.prepare(`

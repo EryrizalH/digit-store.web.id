@@ -36,6 +36,10 @@ creditsRouter.post('/topup', async (c) => {
     return c.json({ error: 'Minimum topup amount is IDR 10,000' }, 400);
   }
 
+  if (topupAmount > 5000000) {
+    return c.json({ error: 'Maximum topup amount is IDR 5,000,000' }, 400);
+  }
+
   const topupId = `TOPUP-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const appUrl = c.env.APP_URL || '';
 
@@ -49,10 +53,10 @@ creditsRouter.post('/topup', async (c) => {
     cancelReturnUrl: `${appUrl}/topup/cancel`
   });
 
-  // Store a pending topup record in credit_transactions for tracking
+  // Store a pending topup record with 'topup_pending' type (not shown in history)
   await c.env.DB.prepare(`
     INSERT INTO credit_transactions (id, user_id, type, amount, reference_id, description, created_at)
-    VALUES (?, ?, 'topup', ?, ?, 'Pending topup via Sumopod', CURRENT_TIMESTAMP)
+    VALUES (?, ?, 'topup_pending', ?, ?, 'Pending topup via Sumopod', CURRENT_TIMESTAMP)
   `).bind(`crtx_${crypto.randomUUID()}`, user.id, topupAmount, topupId).run();
 
   // Audit log
@@ -78,12 +82,13 @@ creditsRouter.get('/history', async (c) => {
   const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '20', 10)));
   const offset = (page - 1) * limit;
 
+  // Filter out topup_pending transactions from history (they are not yet confirmed)
   const transactions = await c.env.DB.prepare(`
-    SELECT * FROM credit_transactions WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+    SELECT * FROM credit_transactions WHERE user_id = ? AND type != 'topup_pending' ORDER BY created_at DESC LIMIT ? OFFSET ?
   `).bind(user.id, limit, offset).all();
 
   const countResult = await c.env.DB.prepare(
-    'SELECT COUNT(*) as total FROM credit_transactions WHERE user_id = ?'
+    "SELECT COUNT(*) as total FROM credit_transactions WHERE user_id = ? AND type != 'topup_pending'"
   ).bind(user.id).first<{ total: number }>();
 
   return c.json({

@@ -233,7 +233,7 @@ export class SumopodGateway implements PaymentGateway {
     };
   }
 
-  async verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }> {
+  async verifyWebhook(payload: any, headers: Record<string, string>, rawBody?: string): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }> {
     // Verify Svix webhook signature if webhook secret is configured
     if (this.webhookSecret) {
       const svixId = headers['svix-id'] || headers['Svix-Id'];
@@ -252,11 +252,13 @@ export class SumopodGateway implements PaymentGateway {
       }
 
       // Compute expected signature: base64(HMAC-SHA256(secret, "{svix_id}.{timestamp}.{body}"))
+      // Use the raw body string for HMAC to match the exact bytes Sumopod signed
       const secret = this.webhookSecret.startsWith('whsec_')
         ? this.webhookSecret.slice(6)
         : this.webhookSecret;
 
-      const signedContent = `${svixId}.${svixTimestamp}.${JSON.stringify(payload)}`;
+      const bodyForSigning = rawBody || JSON.stringify(payload);
+      const signedContent = `${svixId}.${svixTimestamp}.${bodyForSigning}`;
       const encoder = new TextEncoder();
       const secretBytes = Uint8Array.from(atob(secret), c => c.charCodeAt(0));
       const key = await crypto.subtle.importKey(

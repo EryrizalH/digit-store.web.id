@@ -34,7 +34,7 @@ export type Role = 'user' | 'admin';
 export type ProductType = 'file' | 'code' | 'herosms';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 export type ActivationStatus = 'WAITING_CODE' | 'RECEIVED' | 'CANCELLED' | 'TIMEOUT' | 'COMPLETED';
-export type CreditTransactionType = 'topup' | 'debit' | 'refund';
+export type CreditTransactionType = 'topup' | 'topup_pending' | 'debit' | 'refund';
 
 export interface CreditTransaction {
   id: string;
@@ -239,5 +239,5 @@ export interface CreateTransactionResult {
 export interface PaymentGateway {
   name: string;
   createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult>;
-  verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }>;
+  verifyWebhook(payload: any, headers: Record<string, string>, rawBody?: string): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }>;
 }

@@ -23,6 +23,43 @@ describe('Credit System & Sumopod Gateway Tests', () => {
       expect(gateway.name).toBe('sumopod');
     });
 
+    it('should verify webhook with valid Svix signature using rawBody', async () => {
+      const secret = btoa('test-webhook-secret-bytes-32ch');
+      const gateway = new SumopodGateway('test-key', false, `whsec_${secret}`);
+
+      // Raw body with specific formatting (extra space after colon)
+      const rawBody = '{"event_type": "payment.completed","data":{"payment_id":"pay_raw","order_id":"TOPUP-RAW-001","amount":75000,"status":"completed"}}';
+      const payload = JSON.parse(rawBody);
+
+      const svixId = 'msg_rawtest';
+      const svixTimestamp = String(Math.floor(Date.now() / 1000));
+      // Signature is computed over the raw body, not JSON.stringify(payload)
+      const signedContent = `${svixId}.${svixTimestamp}.${rawBody}`;
+
+      const encoder = new TextEncoder();
+      const secretBytes = Uint8Array.from(atob(secret), c => c.charCodeAt(0));
+      const key = await crypto.subtle.importKey(
+        'raw',
+        secretBytes,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(signedContent));
+      const computedSig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+
+      const headers = {
+        'svix-id': svixId,
+        'svix-timestamp': svixTimestamp,
+        'svix-signature': `v1,${computedSig}`
+      };
+
+      const result = await gateway.verifyWebhook(payload, headers, rawBody);
+      expect(result.orderId).toBe('TOPUP-RAW-001');
+      expect(result.status).toBe('paid');
+      expect(result.paymentId).toBe('pay_raw');
+    });
+
     it('should verify webhook with valid Svix signature', async () => {
       const secret = btoa('test-webhook-secret-bytes-32ch');
       const gateway = new SumopodGateway('test-key', false, `whsec_${secret}`);
@@ -201,7 +238,13 @@ describe('Credit System & Sumopod Gateway Tests', () => {
                 currentBalance += Number(args[1] || args[2] || 0);
               }
               if (sql.includes('UPDATE user_credits SET balance = balance -')) {
-                currentBalance -= Number(args[0]);
+                // Atomic debit: check balance >= amount before decrementing
+                const debitAmount = Number(args[0]);
+                if (currentBalance >= debitAmount) {
+                  currentBalance -= debitAmount;
+                  return { meta: { changes: 1 } };
+                }
+                return { meta: { changes: 0 } };
               }
               return { meta: { changes: 1 } };
             },
