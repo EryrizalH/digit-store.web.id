@@ -2,7 +2,7 @@
   "id": "FEAT-001",
   "type": "feat",
   "description": "Add Sumopod payment gateway adapter, credit system DB schema, credit service, and topup API with webhook. This is the core backend feature that enables: (1) SumopodGateway class implementing PaymentGateway interface from src/types.ts, (2) New D1 tables for user_credits and credit_transactions, (3) Credit service for balance operations, (4) Topup API endpoint that creates a Sumopod payment for credit topup, (5) Sumopod webhook endpoint, (6) Auto-refund logic in fulfilment.ts when OTP/digital product fails.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Step 1 - Add Sumopod env vars to src/types.ts Env interface: SUMOPOD_API_KEY (string), SUMOPOD_IS_PRODUCTION (string). Add new types: CreditTransaction interface (id, user_id, type: 'topup'|'debit'|'refund', amount, reference_id, description, created_at), UserCredit interface (user_id, balance, updated_at).",
     "Step 2 - Create migration file migrations/0003_credit_system.sql with: (a) CREATE TABLE user_credits (user_id TEXT PRIMARY KEY REFERENCES users(id), balance REAL NOT NULL DEFAULT 0, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP), (b) CREATE TABLE credit_transactions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), type TEXT NOT NULL, amount REAL NOT NULL, reference_id TEXT, description TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP). Also update schema.sql with these new tables.",
@@ -32,5 +32,5 @@
     "npx vite build"
   ],
   "blocked_reason": null,
-  "findings": ""
+  "findings": "Implemented with Svix-based webhook signature verification (svix-id, svix-timestamp, svix-signature headers) per user-provided Sumopod webhook documentation instead of simple API key verification. Added SUMOPOD_WEBHOOK_SECRET env var for the signing secret. All 65 tests pass (16 new + 49 existing), tsc clean, vite build clean."
 }
