@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Frontend pages for credit topup and balance display. Add a TopupPage where users can enter topup amount and pay via Sumopod QRIS. Add credit balance display in the Navbar. Add topup success/cancel pages. Modify CartPage to allow credit payment option.",
+  "status": "pending",
+  "steps": [
+    "Step 1 - Create src/pages/TopupPage.tsx: A page where authenticated users can top up credits. Show current balance (fetched from GET /api/credits/balance). Input field for topup amount (minimum Rp 10.000, common presets: 25k, 50k, 100k, 200k). 'Topup via QRIS' button that calls POST /api/credits/topup. On success, redirect to the payment URL. Show transaction history from GET /api/credits/history. Follow the design patterns from CartPage.tsx and HeroSmsPage.tsx (glass-panel, rounded-3xl, font-extrabold, etc.).",
+    "Step 2 - Create src/pages/TopupSuccessPage.tsx and src/pages/TopupCancelPage.tsx: Simple status pages shown after Sumopod payment redirect. Success page shows confirmation message and link to check balance. Cancel page shows cancellation message with retry link.",
+    "Step 3 - Add routes in src/App.tsx: Add lazy imports for TopupPage, TopupSuccessPage, TopupCancelPage. Add routes: /topup -> TopupPage, /topup/success -> TopupSuccessPage, /topup/cancel -> TopupCancelPage.",
+    "Step 4 - Modify src/components/Navbar.tsx: Add a credit balance indicator that shows the user's credit balance (fetched from /api/credits/balance when user is logged in). Display as a small badge/chip near the user info area with a Wallet icon. Link to /topup page.",
+    "Step 5 - Modify src/pages/CartPage.tsx: Add 'Bayar dengan Kredit' (Pay with Credits) as a third payment option alongside Midtrans and Xendit. When selected, the checkout payload should set payment_provider to 'credit'. Show current balance and whether it's sufficient for the cart total.",
+    "Step 6 - Add credit payment handling in src/api/orders.ts checkout endpoint: When payment_provider is 'credit', skip creating a payment gateway transaction. Instead, call debitCredit() to deduct the total from user balance. If balance insufficient, return 400 error. If successful, set order payment_status directly to 'paid' and trigger fulfillOrder() immediately. Return success without redirectUrl."
+  ],
+  "acceptance_criteria": [
+    "TopupPage renders with balance display, amount input, preset buttons, and transaction history",
+    "TopupSuccessPage and TopupCancelPage display appropriate messages",
+    "Routes /topup, /topup/success, /topup/cancel are registered in App.tsx",
+    "Navbar shows credit balance for logged-in users with link to topup",
+    "CartPage shows 'Kredit' as third payment option with balance check",
+    "Orders checkout supports payment_provider='credit' with direct debit and fulfilment",
+    "npx tsc --noEmit passes",
+    "npx vite build passes",
+    "npx vitest run passes"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vite build"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,7 @@
+{
+  "task_id": "task-sumopod-credit-system",
+  "task_description": "Add Sumopod payment gateway with credit/topup system and auto-refund logic. Users top up credits via Sumopod QRIS, then spend credits on OTP numbers and digital products. Failed fulfilments auto-refund credits.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

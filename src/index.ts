@@ -8,6 +8,7 @@ import { downloadsRouter } from './api/downloads';
 import { activationsRouter } from './api/activations';
 import { webhooksRouter } from './api/webhooks';
 import { otpRouter } from './api/otp';
+import { creditsRouter } from './api/credits';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -20,6 +21,7 @@ api.route('/downloads', downloadsRouter);
 api.route('/activations', activationsRouter);
 api.route('/webhooks', webhooksRouter);
 api.route('/otp', otpRouter);
+api.route('/credits', creditsRouter);
 
 api.get('/health', (c) => c.json({
   status: 'ok',

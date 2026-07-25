@@ -31,6 +31,9 @@
   "vars": {
     "PAYMENT_PROVIDER": "midtrans",
     "APP_URL": "https://digit-store.eryrizal23.workers.dev",
-    "HEROSMS_BASE_URL": "https://hero-sms.com/stubs/handler_api.php"
+    "HEROSMS_BASE_URL": "https://hero-sms.com/stubs/handler_api.php",
+    "SUMOPOD_API_KEY": "",
+    "SUMOPOD_IS_PRODUCTION": "false",
+    "SUMOPOD_WEBHOOK_SECRET": ""
   }
 }
