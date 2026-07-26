@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-003",
+  "type": "fix",
+  "description": "Address critical review issues: debit race condition, webhook double-credit, Svix signature over raw body, REAL to INTEGER column change, maximum topup cap, and pending topup in history.",
+  "status": "completed",
+  "steps": [
+    "Step 1 - Fix debitCredit race condition: Use single atomic UPDATE with WHERE balance >= amount check instead of SELECT-then-UPDATE.",
+    "Step 2 - Fix topup webhook double-credit: Add idempotency check before crediting.",
+    "Step 3 - Fix Svix signature over re-serialized JSON: Pass raw body text to verifyWebhook and use it for HMAC.",
+    "Step 4 - Fix REAL column for money: Change migrations and schema to use INTEGER.",
+    "Step 5 - Add maximum topup cap (5,000,000 IDR) in POST /topup endpoint.",
+    "Step 6 - Fix pending topup in history: Use 'topup_pending' type and filter from history."
+  ],
+  "acceptance_criteria": [
+    "debitCredit uses atomic UPDATE WHERE balance >= amount",
+    "Webhook checks for existing completed topup before crediting",
+    "verifyWebhook accepts raw body string for HMAC",
+    "Migration and schema use INTEGER for balance/amount",
+    "POST /topup rejects amounts over 5,000,000",
+    "Pending topups use 'topup_pending' type and are filtered from history",
+    "npx tsc --noEmit passes",
+    "npx vitest run passes",
+    "npx vite build passes"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vite build"
+  ],
+  "blocked_reason": null,
+  "findings": "All 6 critical issues from the review addressed. Atomic debit prevents race condition. Idempotency check prevents double-crediting on webhook retry. Raw body used for Svix HMAC. INTEGER columns prevent floating-point drift. Maximum topup cap set at 5,000,000 IDR. topup_pending type separates unconfirmed topups from history. 66 tests pass (1 new raw body signature test added), tsc clean, vite build clean."
+}

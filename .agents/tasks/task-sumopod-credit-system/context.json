@@ -1,0 +1,31 @@
+{
+  "project_type": "Cloudflare Workers + Hono backend, React + Vite + TailwindCSS frontend SPA",
+  "language": "TypeScript",
+  "build_system": "npm + vite for frontend build, wrangler for CF Workers deployment. No Dockerfile.",
+  "test_framework": "vitest with tests/ directory. Tests use describe/it/expect pattern. No conftest equivalent needed.",
+  "build_command": "npx vite build",
+  "test_command": "npx vitest run",
+  "verification_instructions": "1. Run 'npx tsc --noEmit' for type checking. 2. Run 'npx vitest run' for tests. 3. Run 'npx vite build' for frontend build.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "cd /projects/sandbox/digit-store.web.id && npm install",
+  "environment_constraints": "node_modules already installed. No Docker, no wrangler deploy. Validate via tsc + vitest + vite build.",
+  "contribution_requirements": "AGENTS.md says not to modify code directly - but since we are the coding agent, we implement as needed. Code uses 'ponytail:' comment pattern at top of files.",
+  "key_patterns": "PaymentGateway interface in src/types.ts with createTransaction() and verifyWebhook() methods. Adapters in src/services/payments.ts follow constructor(key, options) pattern. getPaymentGateway() factory function selects by provider string. Webhooks in src/api/webhooks.ts. Orders flow: checkout -> createTransaction -> webhook callback -> fulfillOrder. Fulfilment in src/services/fulfilment.ts marks items fulfilled/failed. Migrations in migrations/ directory numbered. Frontend pages in src/pages/, use lazy loading in App.tsx. Context providers in src/context/.",
+  "relevant_files": [
+    "src/types.ts",
+    "src/services/payments.ts",
+    "src/services/fulfilment.ts",
+    "src/api/webhooks.ts",
+    "src/api/orders.ts",
+    "src/index.ts",
+    "src/App.tsx",
+    "src/pages/CartPage.tsx",
+    "src/pages/OrdersPage.tsx",
+    "src/context/AuthContext.tsx",
+    "src/context/CartContext.tsx",
+    "schema.sql",
+    "wrangler.jsonc",
+    "tests/store.test.ts"
+  ],
+  "directory_structure": "src/api/ - Hono route handlers, src/services/ - business logic (payments, fulfilment, auth, herosms, rate-limit), src/pages/ - React page components, src/components/ - React shared components, src/context/ - React context providers, tests/ - vitest test files, migrations/ - D1 SQL migration files"
+}

@@ -3,19 +3,34 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ArrowLeft, AlertCircle, Wallet } from 'lucide-react';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
   const { cart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
   const { user } = useAuth();
 
-  const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit'>('midtrans');
+  const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit' | 'credit'>('midtrans');
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
 
   const hasHeroSms = cart.some(item => item.product.type === 'herosms');
+
+  // Fetch credit balance when user is logged in
+  React.useEffect(() => {
+    if (user) {
+      fetch('/api/credits/balance')
+        .then(res => res.ok ? res.json() : null)
+        .then((data: any) => {
+          if (data && typeof data.balance === 'number') {
+            setCreditBalance(data.balance);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
@@ -223,7 +238,7 @@ export const CartPage: React.FC = () => {
               <label className="text-xs font-semibold text-slate-300 block">
                 Pilih Gateway Pembayaran:
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => setPaymentProvider('midtrans')}
@@ -246,7 +261,39 @@ export const CartPage: React.FC = () => {
                 >
                   <CreditCard className="w-4 h-4" /> Xendit
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentProvider('credit')}
+                  className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    paymentProvider === 'credit'
+                      ? 'border-amber-500 bg-amber-500/10 text-amber-300'
+                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" /> Kredit
+                </button>
               </div>
+
+              {/* Credit balance info when credit is selected */}
+              {paymentProvider === 'credit' && user && (
+                <div className={`p-3 rounded-xl border text-xs ${
+                  creditBalance !== null && creditBalance >= totalPrice
+                    ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
+                    : 'bg-rose-950/40 border-rose-800/50 text-rose-300'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span>Saldo Kredit:</span>
+                    <span className="font-black">
+                      {creditBalance !== null ? formatPrice(creditBalance) : 'Memuat...'}
+                    </span>
+                  </div>
+                  {creditBalance !== null && creditBalance < totalPrice && (
+                    <p className="mt-1 text-[10px] text-rose-400">
+                      Saldo tidak mencukupi. Silakan topup terlebih dahulu.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {hasHeroSms && (

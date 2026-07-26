@@ -5,6 +5,7 @@ import { Env, User } from '../types';
 import { getSessionUser } from '../services/auth';
 import { getPaymentGateway } from '../services/payments';
 import { fulfillOrder } from '../services/fulfilment';
+import { debitCredit } from '../services/credits';
 import { checkRateLimit } from '../services/rate-limit';
 import { HeroSmsClient } from '../services/herosms';
 import { getOtpSettings, calculateSellingPrice, validateOtpSettings, createHeroSmsClient } from './otp';
@@ -239,6 +240,39 @@ ordersRouter.post('/checkout', async (c) => {
   }
 
   // Initialize Payment Transaction
+  if (provider === 'credit') {
+    // Credit payment: debit user balance directly
+    const debitResult = await debitCredit(c.env.DB, user.id, totalAmount, orderId, `Pembayaran order ${orderId}`);
+    if (!debitResult.success) {
+      // Rollback: delete order and order items
+      await c.env.DB.prepare('DELETE FROM order_items WHERE order_id = ?').bind(orderId).run();
+      await c.env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(orderId).run();
+      return c.json({ error: 'Saldo kredit tidak mencukupi' }, 400);
+    }
+
+    // Mark order as paid immediately
+    await c.env.DB.prepare("UPDATE orders SET payment_status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .bind(orderId).run();
+
+    // Trigger fulfilment immediately
+    const fulfillResult = await fulfillOrder(orderId, user.id, c.env);
+
+    // Audit log
+    await c.env.DB.prepare(`
+      INSERT INTO audit_logs (id, user_id, action, ip_address, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(`log_${crypto.randomUUID()}`, user.id, 'CREATE_ORDER', ip, `Order ${orderId} paid with credit for total ${totalAmount}`).run();
+
+    return c.json({
+      success: true,
+      orderId,
+      totalAmount,
+      paymentProvider: 'credit',
+      redirectUrl: null,
+      paymentId: debitResult.transaction?.id || null
+    });
+  }
+
   const gateway = getPaymentGateway(provider, c.env);
   const paymentResult = await gateway.createTransaction({
     orderId,

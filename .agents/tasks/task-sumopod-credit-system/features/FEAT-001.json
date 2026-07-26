@@ -1,0 +1,36 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Add Sumopod payment gateway adapter, credit system DB schema, credit service, and topup API with webhook. This is the core backend feature that enables: (1) SumopodGateway class implementing PaymentGateway interface from src/types.ts, (2) New D1 tables for user_credits and credit_transactions, (3) Credit service for balance operations, (4) Topup API endpoint that creates a Sumopod payment for credit topup, (5) Sumopod webhook endpoint, (6) Auto-refund logic in fulfilment.ts when OTP/digital product fails.",
+  "status": "completed",
+  "steps": [
+    "Step 1 - Add Sumopod env vars to src/types.ts Env interface: SUMOPOD_API_KEY (string), SUMOPOD_IS_PRODUCTION (string). Add new types: CreditTransaction interface (id, user_id, type: 'topup'|'debit'|'refund', amount, reference_id, description, created_at), UserCredit interface (user_id, balance, updated_at).",
+    "Step 2 - Create migration file migrations/0003_credit_system.sql with: (a) CREATE TABLE user_credits (user_id TEXT PRIMARY KEY REFERENCES users(id), balance REAL NOT NULL DEFAULT 0, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP), (b) CREATE TABLE credit_transactions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), type TEXT NOT NULL, amount REAL NOT NULL, reference_id TEXT, description TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP). Also update schema.sql with these new tables.",
+    "Step 3 - Add SumopodGateway class in src/services/payments.ts following the same pattern as MidtransGateway/XenditGateway. Constructor takes apiKey and isProduction flag. Sandbox URL: https://api-pay-sandbox.sumopod.com/api/v1/payments, Production URL: https://api-pay.sumopod.com/api/v1/payments. createTransaction() sends POST with headers Content-Type: application/json and X-Api-Key. Body: { order_id, amount, currency: 'IDR', expires_in_hours: 24, success_return_url: APP_URL + '/topup/success', cancel_return_url: APP_URL + '/topup/cancel', payment_method_type_code: 'QRIS' }. Returns { paymentId, redirectUrl from response.data.payment_url or checkout_url, raw }. verifyWebhook() validates X-Api-Key header matches stored key, extracts order_id and maps status to PaymentStatus. Update getPaymentGateway() factory to handle 'sumopod' provider string.",
+    "Step 4 - Create src/services/credits.ts with functions: (a) getBalance(db, userId) - returns current balance from user_credits table (0 if no row), (b) addCredit(db, userId, amount, type, referenceId, description) - UPSERT user_credits balance and INSERT credit_transactions row, (c) debitCredit(db, userId, amount, referenceId, description) - checks balance >= amount, deducts, inserts transaction, returns success/failure, (d) refundCredit(db, userId, amount, referenceId, description) - adds credit back with type='refund' and inserts transaction.",
+    "Step 5 - Create src/api/credits.ts with Hono router containing: (a) GET /balance - returns user credit balance, (b) POST /topup - accepts { amount } (minimum 10000 IDR), creates an order-like record in credit_transactions with type='topup' and status tracking, calls SumopodGateway.createTransaction() with order_id = 'TOPUP-{timestamp}-{random}', returns { redirectUrl, topupId }. (c) GET /history - returns paginated credit_transactions for user.",
+    "Step 6 - Add Sumopod webhook route in src/api/webhooks.ts: POST /sumopod handler that verifies the webhook using X-Api-Key header, extracts order_id and payment status, if order_id starts with 'TOPUP-' then credit the user balance using addCredit(). For regular orders (non-topup), update order payment_status and trigger fulfillOrder() like existing Midtrans/Xendit webhooks.",
+    "Step 7 - Modify src/services/fulfilment.ts to add auto-refund logic: After an order_item is marked as 'failed' (in the code, file, and herosms type handlers), check if the order was paid via credits (check if there's a credit_transaction with type='debit' and reference_id matching the order_id). If so, call refundCredit() for the item price. Add an audit log entry for each auto-refund.",
+    "Step 8 - Register the credits router in src/index.ts: import creditsRouter from src/api/credits.ts and add api.route('/credits', creditsRouter).",
+    "Step 9 - Update wrangler.jsonc vars to add SUMOPOD_API_KEY placeholder and SUMOPOD_IS_PRODUCTION: 'false'.",
+    "Step 10 - Add tests in tests/credits.test.ts: (a) Test SumopodGateway mock mode createTransaction returns expected shape, (b) Test credit service functions (addCredit, debitCredit, refundCredit) with mock DB, (c) Test Sumopod webhook verification logic."
+  ],
+  "acceptance_criteria": [
+    "SumopodGateway class implements PaymentGateway interface and compiles without TypeScript errors",
+    "getPaymentGateway('sumopod', env) returns a SumopodGateway instance",
+    "Migration file 0003_credit_system.sql creates user_credits and credit_transactions tables correctly",
+    "Credit service functions (getBalance, addCredit, debitCredit, refundCredit) are exported and type-safe",
+    "Credits API router has GET /balance, POST /topup, GET /history endpoints behind auth",
+    "Sumopod webhook endpoint at POST /api/webhooks/sumopod handles both topup and regular order payments",
+    "Fulfilment.ts auto-refunds credits when items fail and the order was credit-paid",
+    "npx tsc --noEmit passes with zero errors",
+    "npx vitest run passes all existing + new tests"
+  ],
+  "verification": [
+    "npx tsc --noEmit",
+    "npx vitest run",
+    "npx vite build"
+  ],
+  "blocked_reason": null,
+  "findings": "Implemented with Svix-based webhook signature verification (svix-id, svix-timestamp, svix-signature headers) per user-provided Sumopod webhook documentation instead of simple API key verification. Added SUMOPOD_WEBHOOK_SECRET env var for the signing secret. All 65 tests pass (16 new + 49 existing), tsc clean, vite build clean."
+}
