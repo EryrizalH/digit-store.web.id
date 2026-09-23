@@ -10,6 +10,7 @@ interface AuthContextType {
   closeAuthModal: () => void;
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  guestCheckout: (email: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -63,10 +64,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (email: string, pass: string) => {
-    const res = await fetch('/api/auth/register', {
+    const isCurrentGuest = Boolean(user?.is_guest && user.email === email.trim().toLowerCase());
+    const res = await fetch(isCurrentGuest ? '/api/auth/claim-guest' : '/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass })
+      body: JSON.stringify(isCurrentGuest ? { password: pass } : { email, password: pass })
     });
     const data = (await res.json()) as any;
     if (res.ok && data.user) {
@@ -77,6 +79,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false, error: data.error || 'Registration failed' };
   };
 
+  const guestCheckout = async (email: string) => {
+    const res = await fetch('/api/auth/guest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = (await res.json()) as any;
+    if (res.ok && data.user) {
+      setUser(data.user);
+      return { success: true };
+    }
+    return { success: false, error: data.error || 'Checkout tamu gagal' };
+  };
+
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     setUser(null);
@@ -85,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider value={{
       user, loading, isAuthModalOpen, authMode,
-      openAuthModal, closeAuthModal, login, register, logout, refreshUser
+      openAuthModal, closeAuthModal, login, register, guestCheckout, logout, refreshUser
     }}>
       {children}
     </AuthContext.Provider>

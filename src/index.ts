@@ -8,6 +8,7 @@ import { activationsRouter } from './api/activations';
 import { webhooksRouter } from './api/webhooks';
 import { otpRouter } from './api/otp';
 import { creditsRouter } from './api/credits';
+import { notificationsRouter } from './api/notifications';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -21,6 +22,7 @@ api.route('/activations', activationsRouter);
 api.route('/webhooks', webhooksRouter);
 api.route('/otp', otpRouter);
 api.route('/credits', creditsRouter);
+api.route('/notifications', notificationsRouter);
 
 api.get('/health', (c) => c.json({
   status: 'ok',
@@ -31,6 +33,28 @@ api.get('/health', (c) => c.json({
 api.all('*', (c) => c.json({ error: 'API route not found' }, 404));
 
 app.route('/api', api);
+
+function xmlEscape(value: string): string {
+  return value.replace(/[<>&'\"]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[char] || char));
+}
+
+app.get('/sitemap.xml', async (c) => {
+  const baseUrl = (c.env.APP_URL || new URL(c.req.url).origin).replace(/\/$/, '');
+  // ponytail: products schema defines created_at (not updated_at)
+  const products = await c.env.DB.prepare("SELECT slug, created_at FROM products WHERE is_active = 1 AND type != 'herosms' ORDER BY created_at DESC").all<{ slug: string; created_at?: string }>();
+  const urls = [
+    `${baseUrl}/`,
+    `${baseUrl}/bantuan`,
+    ...(products.results || []).map((product) => `${baseUrl}/produk/${encodeURIComponent(product.slug)}`)
+  ];
+  const body = urls.map((url) => `  <url><loc>${xmlEscape(url)}</loc></url>`).join('\n');
+  return c.body(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>`, 200, { 'Content-Type': 'application/xml; charset=UTF-8', 'Cache-Control': 'public, max-age=3600' });
+});
+
+app.get('/robots.txt', (c) => {
+  const baseUrl = (c.env.APP_URL || new URL(c.req.url).origin).replace(/\/$/, '');
+  return c.text(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nSitemap: ${baseUrl}/sitemap.xml\n`, 200, { 'Content-Type': 'text/plain; charset=UTF-8' });
+});
 
 // SPA Asset Fallback
 app.all('*', async (c) => {

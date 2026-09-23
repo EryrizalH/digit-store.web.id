@@ -4,17 +4,32 @@ import { Product } from '../types';
 import { useCart } from '../context/CartContext';
 import { ArtworkImage } from '../components/ArtworkImage';
 import { ProductDetailSkeleton } from '../components/Skeleton';
-import { ArrowLeft, Download, Key, ShoppingBag, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Download, Key, ShoppingBag, CheckCircle2, AlertCircle, Star } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { user, openAuthModal } = useAuth();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addedNotice, setAddedNotice] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewSummary, setReviewSummary] = useState({ count: 0, average: 0 });
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewBody, setReviewBody] = useState('');
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+
+  const fetchReviews = async (productId: string) => {
+    const res = await fetch(`/api/products/by-id/${productId}/reviews`);
+    if (!res.ok) return;
+    const data = await res.json() as any;
+    setReviews(data.reviews || []);
+    setReviewSummary(data.summary || { count: 0, average: 0 });
+  };
 
   const fetchProductDetail = async () => {
     if (!slug) return;
@@ -28,6 +43,7 @@ export const ProductDetailPage: React.FC = () => {
       }
       const data = (await res.json()) as any;
       setProduct(data.product || null);
+      if (data.product?.id) fetchReviews(data.product.id);
     } catch (err: any) {
       setError(err.message || 'Terjadi kesalahan');
     } finally {
@@ -39,6 +55,38 @@ export const ProductDetailPage: React.FC = () => {
     fetchProductDetail();
   }, [slug]);
 
+  useEffect(() => {
+    if (!product) return;
+    const description = product.description || `Beli ${product.name} di DigitStore.`;
+    document.title = `${product.name} | DigitStore`;
+    let meta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'description';
+      document.head.appendChild(meta);
+    }
+    meta.content = description.slice(0, 160);
+
+    const setOg = (property: string, content: string) => {
+      let tag = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null;
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute('property', property);
+        document.head.appendChild(tag);
+      }
+      tag.content = content;
+    };
+    setOg('og:title', `${product.name} | DigitStore`);
+    setOg('og:description', description.slice(0, 160));
+    setOg('og:type', 'product');
+    setOg('og:url', window.location.href);
+    if (product.artwork_url) setOg('og:image', new URL(product.artwork_url, window.location.origin).toString());
+
+    return () => {
+      document.title = 'DigitStore - Toko Produk Digital & Aktivasi SMS';
+    };
+  }, [product]);
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
   };
@@ -48,6 +96,22 @@ export const ProductDetailPage: React.FC = () => {
     addToCart(product);
     setAddedNotice(true);
     setTimeout(() => setAddedNotice(false), 2500);
+  };
+
+  const submitReview = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!product) return;
+    if (!user) { openAuthModal('login'); return; }
+    setReviewMessage(null);
+    const res = await fetch(`/api/products/by-id/${product.id}/reviews`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: reviewRating, body: reviewBody })
+    });
+    const data = await res.json() as any;
+    if (!res.ok) { setReviewMessage(data.error || 'Ulasan gagal disimpan.'); return; }
+    setReviewBody('');
+    setReviewMessage('Ulasan terverifikasi berhasil diterbitkan.');
+    fetchReviews(product.id);
   };
 
   if (loading) {
@@ -125,7 +189,7 @@ export const ProductDetailPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Added Notification */}
+      {/* Added Notification */}
         {addedNotice && (
           <div className="p-4 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-2xl text-xs font-bold flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -135,6 +199,20 @@ export const ProductDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <section className="glass-panel rounded-3xl border border-slate-800 p-6 space-y-4" aria-labelledby="reviews-title">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="reviews-title" className="text-base font-extrabold text-white">Ulasan pembeli terverifikasi</h2>
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-300"><Star className="w-4 h-4 fill-current" /> {reviewSummary.average || '-'} ({reviewSummary.count})</span>
+        </div>
+        {reviews.length > 0 ? <div className="space-y-3">{reviews.map((review) => <article key={review.id} className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4"><div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-200">{review.author}</span><span className="text-[11px] text-amber-300">{'★'.repeat(Number(review.rating))}</span></div><p className="mt-2 text-xs leading-relaxed text-slate-400">{review.body}</p><span className="mt-2 inline-block text-[10px] text-emerald-400">Pembelian terverifikasi</span></article>)}</div> : <p className="text-xs text-slate-500">Belum ada ulasan untuk produk ini.</p>}
+        <form onSubmit={submitReview} className="border-t border-slate-800 pt-4 space-y-3">
+          <div className="flex items-center gap-3"><label htmlFor="review-rating" className="text-xs font-semibold text-slate-300">Rating</label><select id="review-rating" value={reviewRating} onChange={(e) => setReviewRating(Number(e.target.value))} className="min-h-[40px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-xs text-white"><option value="5">5 - Sangat baik</option><option value="4">4 - Baik</option><option value="3">3 - Cukup</option><option value="2">2 - Kurang</option><option value="1">1 - Buruk</option></select></div>
+          <textarea value={reviewBody} onChange={(e) => setReviewBody(e.target.value)} minLength={10} maxLength={1000} required rows={3} placeholder="Bagikan pengalaman Anda setelah produk diterima" className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-xs text-white placeholder-slate-500" />
+          {reviewMessage && <p role="status" className="text-xs text-indigo-300">{reviewMessage}</p>}
+          <button type="submit" className="min-h-[44px] rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-500">{user ? 'Kirim ulasan' : 'Masuk untuk mengulas'}</button>
+        </form>
+      </section>
 
       {/* Sticky Mobile CTA Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#090d16]/95 border-t border-slate-800/90 backdrop-blur-xl sm:relative sm:bg-transparent sm:border-none sm:p-0">

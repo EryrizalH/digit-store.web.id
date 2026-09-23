@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, closeAuthModal, authMode, login, register } = useAuth();
+  const { isAuthModalOpen, closeAuthModal, authMode, login, register, user } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>(authMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      setMode(authMode);
+      if (user?.is_guest) setEmail(user.email);
+      setError(null);
+    }
+  }, [isAuthModalOpen, authMode, user]);
 
   // ponytail: hook traps Tab/Shift+Tab, auto-focuses close button, and restores focus on close
   const modalRef = useFocusTrap<HTMLDivElement>(isAuthModalOpen, closeAuthModal);
@@ -52,7 +60,7 @@ export const AuthModal: React.FC = () => {
         </button>
 
         <h2 id="auth-modal-title" className="text-xl font-extrabold text-white mb-1">
-          {mode === 'login' ? 'Masuk ke Akun' : 'Daftar Akun Baru'}
+          {mode === 'login' ? 'Masuk ke Akun' : user?.is_guest ? 'Amankan Akun Tamu' : 'Daftar Akun Baru'}
         </h2>
         <p className="text-xs text-slate-400 mb-6">
           Akses riwayat pesanan, unduhan file, dan lisensi Anda.
@@ -108,7 +116,7 @@ export const AuthModal: React.FC = () => {
             className="w-full py-3 min-h-[44px] rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             {mode === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-            <span>{loading ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Daftar'}</span>
+            <span>{loading ? 'Memproses...' : mode === 'login' ? 'Masuk' : user?.is_guest ? 'Simpan Kata Sandi' : 'Daftar'}</span>
           </button>
         </form>
 

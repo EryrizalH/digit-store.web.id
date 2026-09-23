@@ -1,6 +1,7 @@
 import { Env } from '../types';
 import { HeroSmsClient, HeroSmsError } from './herosms';
 import { refundCredit } from './credits';
+import { createInAppNotification, sendNotificationWebhook } from './notifications';
 
 export async function fulfillOrder(orderId: string, userId: string, env: Env): Promise<{ success: boolean; message: string }> {
   // 1. Fetch order
@@ -61,14 +62,19 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
         if (!existingAlloc) {
           const availableCodes = await env.DB.prepare(`
             SELECT id, code FROM stock_codes
-            WHERE product_id = ? AND is_used = 0
+            WHERE product_id = ?
+              AND COALESCE(status, CASE WHEN is_used = 0 THEN 'available' ELSE 'used' END) = 'available'
+              AND (expires_at IS NULL OR expires_at > unixepoch())
             LIMIT ?
           `).bind(item.product_id, item.quantity).all<any>();
 
           const allocatedIds: string[] = [];
           for (const stock of availableCodes.results || []) {
             const updateRes = await env.DB.prepare(`
-              UPDATE stock_codes SET is_used = 1, order_id = ? WHERE id = ? AND is_used = 0
+              UPDATE stock_codes SET is_used = 1, status = 'used', order_id = ?
+              WHERE id = ?
+                AND COALESCE(status, CASE WHEN is_used = 0 THEN 'available' ELSE 'used' END) = 'available'
+                AND (expires_at IS NULL OR expires_at > unixepoch())
             `).bind(orderId, stock.id).run();
 
             if (updateRes.meta && updateRes.meta.changes > 0) {
@@ -85,7 +91,7 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
             // Revert any partially allocated codes to prevent oversell or stuck records
             if (allocatedIds.length > 0) {
               for (const stockId of allocatedIds) {
-                await env.DB.prepare("UPDATE stock_codes SET is_used = 0, order_id = NULL WHERE id = ?").bind(stockId).run();
+                await env.DB.prepare("UPDATE stock_codes SET is_used = 0, status = 'available', order_id = NULL WHERE id = ?").bind(stockId).run();
               }
               await env.DB.prepare("DELETE FROM order_stock_allocations WHERE order_item_id = ?").bind(item.id).run();
             }
@@ -198,6 +204,8 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
 
   // Auto-refund credits for failed items if order was paid via credits
   await autoRefundFailedItems(orderId, userId, env);
+  await createInAppNotification(env.DB, userId, 'Status pengiriman diperbarui', `Detail fulfillment order ${orderId} sudah diperbarui.`, orderId);
+  await sendNotificationWebhook(env, { event: 'fulfillment.updated', orderId, userId });
 
   return { success: true, message: 'Order fulfilment processing completed' };
 }

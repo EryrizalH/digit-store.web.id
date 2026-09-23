@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Trash2, Plus, Minus, CreditCard, ArrowRight, AlertCircle } from 'lucide-react';
+import { X, Trash2, Plus, Minus, CreditCard, ArrowRight, AlertCircle, Mail } from 'lucide-react';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -10,12 +10,15 @@ interface CartDrawerProps {
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   const { cart, isCartOpen, closeCart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
-  const { user, openAuthModal } = useAuth();
+  const { user, openAuthModal, guestCheckout } = useAuth();
 
   const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit'>('midtrans');
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [guestEmail, setGuestEmail] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [referralCode, setReferralCode] = useState('');
 
   // ponytail: hook traps Tab/Shift+Tab, auto-focuses close button, and restores focus on close
   const drawerRef = useFocusTrap<HTMLDivElement>(isCartOpen, closeCart);
@@ -29,11 +32,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   };
 
   const handleCheckout = async () => {
-    if (!user) {
-      openAuthModal('login');
-      return;
-    }
-
     if (hasHeroSms && !agreedPolicy) {
       setError('Wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum checkout.');
       return;
@@ -43,6 +41,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
     setError(null);
 
     try {
+      if (!user) {
+        if (!guestEmail.trim()) {
+          setError('Masukkan email untuk menerima akses pesanan Anda.');
+          return;
+        }
+        const guest = await guestCheckout(guestEmail.trim());
+        if (!guest.success) {
+          if (guest.error?.includes('sudah terdaftar')) openAuthModal('login');
+          throw new Error(guest.error || 'Checkout tamu gagal');
+        }
+      }
+
       const idempotencyKey = `idemp_${Date.now()}_${Math.random()}`;
       const payload = {
         items: cart.map(item => ({
@@ -56,6 +66,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
         payment_provider: paymentProvider,
         idempotency_key: idempotencyKey,
         agreed_policy: agreedPolicy
+        ,coupon_code: couponCode.trim() || undefined
+        ,referral_code: referralCode.trim() || undefined
       };
 
       const res = await fetch('/api/orders/checkout', {
@@ -269,12 +281,41 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                 </span>
               </div>
 
+              {!user && (
+                <div>
+                  <label htmlFor="guest-checkout-email" className="text-xs font-semibold text-slate-300 block mb-1.5">Email untuk akses pesanan</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="guest-checkout-email"
+                      type="email"
+                      value={guestEmail}
+                      onChange={(e) => setGuestEmail(e.target.value)}
+                      placeholder="nama@email.com"
+                      className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                    />
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500">Email baru dibuatkan sesi tamu selama 24 jam. Email akun lama perlu login.</p>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="cart-coupon-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Kode kupon (opsional)</label>
+                <input id="cart-coupon-code" type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="PROMO10" className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-mono text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+              </div>
+
+              <div>
+                <label htmlFor="cart-referral-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Referral code (opsional)</label>
+                <input id="cart-referral-code" type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} placeholder="REF-AB12CD34" className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-mono text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                <p className="mt-1 text-[10px] text-slate-500">Potongan referral 5%, maksimal Rp 10.000.</p>
+              </div>
+
               <button
                 onClick={handleCheckout}
                 disabled={loading}
                 className="w-full py-3.5 min-h-[44px] rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
-                {loading ? 'Memproses...' : user ? 'Bayar Sekarang' : 'Login untuk Checkout'}
+                {loading ? 'Memproses...' : user ? 'Bayar Sekarang' : 'Checkout sebagai Tamu'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

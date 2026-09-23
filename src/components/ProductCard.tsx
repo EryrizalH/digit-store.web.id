@@ -77,6 +77,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               Stok: {product.stock_count ?? 0}
             </span>
           )}
+          {product.type === 'code' && product.is_low_stock && (product.stock_count ?? 0) > 0 && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/70 text-amber-300 border border-amber-800">
+              Stok terbatas
+            </span>
+          )}
         </div>
 
         {/* Title */}

@@ -6,6 +6,10 @@ import { checkRateLimit } from '../services/rate-limit';
 
 export const authRouter = new Hono<{ Bindings: Env; Variables: { user?: User | null } }>();
 
+function newReferralCode(): string {
+  return `REF-${crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
+
 // Register
 authRouter.post('/register', async (c) => {
   const ip = c.req.header('cf-connecting-ip') || '127.0.0.1';
@@ -19,28 +23,96 @@ authRouter.post('/register', async (c) => {
     return c.json({ error: 'Valid email and password (min 6 chars) required' }, 400);
   }
 
-  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email.toLowerCase()).first();
-  if (existing) {
+  const existing = await c.env.DB.prepare('SELECT id, is_guest, password_hash FROM users WHERE email = ?')
+    .bind(email.toLowerCase()).first<{ id: string; is_guest?: number; password_hash?: string | null }>();
+  if (existing && (!existing.is_guest || existing.password_hash)) {
     return c.json({ error: 'Email already registered' }, 400);
   }
 
-  const userId = `usr_${crypto.randomUUID()}`;
   const passwordHash = await hashPassword(password);
-  
-  await c.env.DB.prepare(
-    'INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)'
-  ).bind(userId, email.toLowerCase(), passwordHash, 'user').run();
+  let userId: string;
+
+  if (existing && existing.is_guest && !existing.password_hash) {
+    // ponytail: upgrade unclaimed guest account to permanent account, retaining existing orders
+    userId = existing.id;
+    await c.env.DB.prepare(
+      'UPDATE users SET password_hash = ?, is_guest = 0 WHERE id = ?'
+    ).bind(passwordHash, userId).run();
+  } else {
+    userId = `usr_${crypto.randomUUID()}`;
+    await c.env.DB.prepare(
+      'INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)'
+    ).bind(userId, email.toLowerCase(), passwordHash, 'user').run();
+  }
 
   const sessionId = await createSession(c.env.DB, userId);
   setCookie(c, 'session', sessionId, {
     httpOnly: true,
-    secure: true,
+    secure: c.env.APP_ENV !== 'development',
     sameSite: 'Lax',
     path: '/',
     maxAge: 7 * 24 * 60 * 60
   });
 
   return c.json({ success: true, user: { id: userId, email: email.toLowerCase(), role: 'user' } });
+});
+
+// Guest checkout creates a short-lived, order-owning session without a password.
+// Existing addresses always require normal login to avoid account takeover.
+authRouter.post('/guest', async (c) => {
+  const ip = c.req.header('cf-connecting-ip') || '127.0.0.1';
+  const rl = await checkRateLimit(c.env.RATE_LIMIT_KV, `guest:${ip}`, 5, 300);
+  if (!rl.success) return c.json({ error: 'Terlalu banyak percobaan checkout tamu. Coba lagi nanti.' }, 429);
+
+  const body = await c.req.json().catch(() => ({}));
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return c.json({ error: 'Email checkout tidak valid.' }, 400);
+  }
+
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first<{ id: string }>();
+  if (existing) {
+    return c.json({ error: 'Email sudah terdaftar. Silakan masuk agar pesanan tetap tersimpan di akun Anda.', code: 'ACCOUNT_EXISTS' }, 409);
+  }
+
+  const userId = `gst_${crypto.randomUUID()}`;
+  await c.env.DB.prepare(
+    'INSERT INTO users (id, email, password_hash, role, is_guest) VALUES (?, ?, NULL, ?, 1)'
+  ).bind(userId, email, 'user').run();
+
+  const sessionId = await createSession(c.env.DB, userId);
+  setCookie(c, 'session', sessionId, {
+    httpOnly: true,
+    secure: c.env.APP_ENV !== 'development',
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: 24 * 60 * 60
+  });
+
+  return c.json({ success: true, user: { id: userId, email, role: 'user', is_guest: 1 } });
+});
+
+authRouter.post('/claim-guest', async (c) => {
+  const sessionId = getCookie(c, 'session');
+  const current = await getSessionUser(c.env.DB, sessionId || '');
+  if (!current || !current.is_guest) return c.json({ error: 'Sesi tamu tidak ditemukan.' }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const password = String(body.password || '');
+  if (password.length < 6) return c.json({ error: 'Kata sandi minimal 6 karakter.' }, 400);
+  const passwordHash = await hashPassword(password);
+  await c.env.DB.prepare('UPDATE users SET password_hash = ?, is_guest = 0 WHERE id = ? AND is_guest = 1').bind(passwordHash, current.id).run();
+  return c.json({ success: true, user: { id: current.id, email: current.email, role: current.role, is_guest: 0 } });
+});
+
+authRouter.get('/referral-code', async (c) => {
+  const current = await getSessionUser(c.env.DB, getCookie(c, 'session') || '');
+  if (!current) return c.json({ error: 'Unauthorized' }, 401);
+  if (!current.referral_code) {
+    const referralCode = newReferralCode();
+    await c.env.DB.prepare('UPDATE users SET referral_code = ? WHERE id = ? AND referral_code IS NULL').bind(referralCode, current.id).run();
+    return c.json({ referralCode });
+  }
+  return c.json({ referralCode: current.referral_code });
 });
 
 // Login

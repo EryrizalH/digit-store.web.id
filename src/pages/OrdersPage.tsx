@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Order, OrderItem, FileEntitlement, OrderStockAllocation, SmsActivation } from '../types';
+import { Order, OrderItem, FileEntitlement, OrderStockAllocation, SmsActivation, Product } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Download, Key, Smartphone, Copy, Check, Clock, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+import { Download, Key, Smartphone, Copy, Check, Clock, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
 import { SmsActivationViewer } from '../components/SmsActivationViewer';
 
 interface OrderDetailData {
@@ -17,6 +18,7 @@ export const OrdersPage: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { addToCart } = useCart();
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderDetail, setOrderDetail] = useState<OrderDetailData | null>(null);
@@ -26,6 +28,12 @@ export const OrdersPage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [reorderId, setReorderId] = useState<string | null>(null);
+  const [reorderMessage, setReorderMessage] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportMessage, setReportMessage] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportResult, setReportResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -51,9 +59,9 @@ export const OrdersPage: React.FC = () => {
     }
   };
 
-  const fetchOrderDetail = async (orderId: string) => {
-    setDetailLoading(true);
-    setDetailError(null);
+  const fetchOrderDetail = async (orderId: string, silent = false) => {
+    if (!silent) setDetailLoading(true);
+    if (!silent) setDetailError(null);
     try {
       const res = await fetch(`/api/orders/${orderId}`);
       if (res.ok) {
@@ -61,13 +69,15 @@ export const OrdersPage: React.FC = () => {
         setOrderDetail(data);
       } else {
         setOrderDetail(null);
-        setDetailError('Gagal memuat rincian pesanan. Silakan coba lagi.');
+        if (!silent) setDetailError('Gagal memuat rincian pesanan. Silakan coba lagi.');
       }
     } catch {
-      setOrderDetail(null);
-      setDetailError('Terjadi kendala jaringan saat memuat rincian pesanan.');
+      if (!silent) {
+        setOrderDetail(null);
+        setDetailError('Terjadi kendala jaringan saat memuat rincian pesanan.');
+      }
     } finally {
-      setDetailLoading(false);
+      if (!silent) setDetailLoading(false);
     }
   };
 
@@ -84,6 +94,19 @@ export const OrdersPage: React.FC = () => {
       navigate(`/pesanan/${orders[0].id}`, { replace: true });
     }
   }, [user, id, orders]);
+
+  useEffect(() => {
+    if (!user || !id || !orderDetail) return;
+    const activeDelivery = orderDetail.order.delivery_status === 'awaiting_payment' ||
+      orderDetail.order.delivery_status === 'processing' ||
+      orderDetail.order.delivery_status === 'failed';
+    if (!activeDelivery) return;
+
+    const interval = window.setInterval(() => {
+      void fetchOrderDetail(id, true);
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [user, id, orderDetail?.order.delivery_status]);
 
   // ponytail: native safe clipboard copy with user feedback
   const copyToClipboard = async (text: string) => {
@@ -103,6 +126,61 @@ export const OrdersPage: React.FC = () => {
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
+  };
+
+  const handleReorder = async (item: OrderItem) => {
+    if (!item.product_slug || item.product_type === 'herosms') {
+      setReorderMessage('Rute OTP perlu dipilih ulang melalui konfigurator.');
+      return;
+    }
+    setReorderId(item.id);
+    setReorderMessage(null);
+    try {
+      const res = await fetch(`/api/products/by-slug/${encodeURIComponent(item.product_slug)}`);
+      const data = (await res.json()) as { product?: Product; error?: string };
+      if (!res.ok || !data.product) throw new Error(data.error || 'Produk sudah tidak tersedia.');
+      addToCart(data.product, item.quantity);
+      setReorderMessage(`${item.product_name} ditambahkan ke keranjang.`);
+    } catch (err: any) {
+      setReorderMessage(err.message || 'Produk tidak dapat dibeli ulang.');
+    } finally {
+      setReorderId(null);
+    }
+  };
+
+  const submitReport = async () => {
+    if (!id || reportMessage.trim().length < 10) {
+      setReportResult('Jelaskan masalah minimal 10 karakter.');
+      return;
+    }
+    setReportSending(true);
+    setReportResult(null);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(id)}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: 'Masalah fulfillment order', message: reportMessage.trim() })
+      });
+      const data = (await res.json()) as any;
+      if (!res.ok) throw new Error(data.error || 'Laporan tidak dapat dikirim.');
+      setReportResult(`Laporan diterima dengan nomor ${data.ticket?.id || 'baru'}.`);
+      setReportMessage('');
+      setReportOpen(false);
+    } catch (err: any) {
+      setReportResult(err.message || 'Laporan tidak dapat dikirim.');
+    } finally {
+      setReportSending(false);
+    }
+  };
+
+  const deliveryLabel = (status?: string) => {
+    switch (status) {
+      case 'fulfilled': return 'Produk siap digunakan';
+      case 'failed': return 'Perlu tindakan support';
+      case 'refunded': return 'Dana sudah dikembalikan';
+      case 'processing': return 'Sedang menyiapkan produk';
+      default: return 'Menunggu pembayaran';
+    }
   };
 
   if (authLoading || loading) {
@@ -236,8 +314,89 @@ export const OrdersPage: React.FC = () => {
                   <span className="text-xl font-black text-emerald-400">
                     {formatPrice(orderDetail.order.total_amount)}
                   </span>
+                  <div className="flex flex-wrap justify-end gap-2 mt-2">
+                    <Link
+                      to={`/pesanan/${orderDetail.order.id}/invoice`}
+                      className="min-h-[40px] px-3 rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white text-[11px] font-bold inline-flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    >
+                      Invoice
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setReportOpen((open) => !open)}
+                      className="min-h-[40px] px-3 rounded-lg border border-rose-800/70 bg-rose-950/30 text-rose-200 hover:bg-rose-900/40 text-[11px] font-bold inline-flex items-center justify-center focus-visible:ring-2 focus-visible:ring-rose-400"
+                    >
+                      Laporkan masalah
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              <div
+                role="status"
+                aria-live="polite"
+                className={`rounded-2xl border p-4 ${
+                  orderDetail.order.delivery_status === 'failed'
+                    ? 'border-rose-800/60 bg-rose-950/30'
+                    : orderDetail.order.delivery_status === 'fulfilled'
+                      ? 'border-emerald-800/60 bg-emerald-950/30'
+                      : 'border-indigo-800/60 bg-indigo-950/30'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status delivery</span>
+                    <p className="text-sm font-extrabold text-white mt-1">{deliveryLabel(orderDetail.order.delivery_status)}</p>
+                  </div>
+                  {(orderDetail.order.delivery_status === 'processing' || orderDetail.order.delivery_status === 'awaiting_payment') && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-200">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Update otomatis
+                    </span>
+                  )}
+                </div>
+                {orderDetail.order.delivery_status === 'failed' && (
+                  <p className="text-xs text-rose-200 mt-2">Tim support dapat melakukan retry atau refund untuk item yang gagal.</p>
+                )}
+              </div>
+
+              {reorderMessage && (
+                <div role="status" className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-xs text-indigo-200">
+                  {reorderMessage}
+                </div>
+              )}
+
+              {reportResult && (
+                <div role="status" className="rounded-xl border border-slate-700 bg-slate-900/70 p-3 text-xs text-slate-200">
+                  {reportResult}
+                </div>
+              )}
+
+              {reportOpen && (
+                <div className="rounded-2xl border border-rose-800/60 bg-rose-950/20 p-4 space-y-3">
+                  <div>
+                    <h4 className="text-sm font-extrabold text-rose-100">Laporkan masalah order</h4>
+                    <p className="text-xs text-rose-200/80 mt-1">Jelaskan item yang belum diterima atau kendala saat penggunaan.</p>
+                  </div>
+                  <label htmlFor="order-report-message" className="sr-only">Deskripsi masalah</label>
+                  <textarea
+                    id="order-report-message"
+                    value={reportMessage}
+                    onChange={(e) => setReportMessage(e.target.value)}
+                    rows={4}
+                    maxLength={2000}
+                    placeholder="Contoh: kode tidak bisa digunakan setelah saya salin..."
+                    className="w-full rounded-xl border border-rose-800/70 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-rose-500 focus-visible:ring-2 focus-visible:ring-rose-400"
+                  />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button type="button" onClick={() => setReportOpen(false)} className="min-h-[44px] px-4 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold focus-visible:ring-2 focus-visible:ring-slate-400">
+                      Batal
+                    </button>
+                    <button type="button" onClick={() => void submitReport()} disabled={reportSending} className="min-h-[44px] px-4 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold focus-visible:ring-2 focus-visible:ring-rose-400">
+                      {reportSending ? 'Mengirim...' : 'Kirim laporan'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
 
 
@@ -260,6 +419,16 @@ export const OrdersPage: React.FC = () => {
                         <div className="text-right shrink-0">
                           <span className="text-slate-300 font-bold">{item.quantity}x</span>
                           <span className="text-emerald-400 font-bold ml-2">{formatPrice(item.price)}</span>
+                          {item.fulfilment_status !== 'refunded' && (
+                            <button
+                              type="button"
+                              onClick={() => void handleReorder(item)}
+                              disabled={reorderId === item.id}
+                              className="mt-2 min-h-[40px] px-3 rounded-lg border border-indigo-700 bg-indigo-950/40 text-indigo-200 hover:bg-indigo-900/50 disabled:opacity-50 inline-flex items-center gap-1.5 text-[11px] font-bold focus-visible:ring-2 focus-visible:ring-indigo-400"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5" /> {reorderId === item.id ? 'Memuat...' : 'Beli lagi'}
+                            </button>
+                          )}
                         </div>
                       </div>
 

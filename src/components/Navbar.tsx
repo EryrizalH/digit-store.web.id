@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, LogOut, ShieldCheck, KeyRound, Search, X, Smartphone, Wallet } from 'lucide-react';
+import { ShoppingBag, User, LogOut, ShieldCheck, KeyRound, Search, X, Smartphone, Wallet, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -8,12 +8,16 @@ export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, logout } = useAuth();
+  const { user, logout, openAuthModal } = useAuth();
   const { totalItemsCount } = useCart();
 
   const [searchInput, setSearchInput] = useState(searchParams.get('q') || '');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
 
   // Fetch credit balance when user is logged in
   useEffect(() => {
@@ -30,6 +34,37 @@ export const Navbar: React.FC = () => {
       setCreditBalance(null);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user) { setReferralCode(null); return; }
+    fetch('/api/auth/referral-code').then((res) => res.ok ? res.json() : null).then((data: any) => setReferralCode(data?.referralCode || null)).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) { setNotifications([]); setUnreadNotifications(0); return; }
+    let cancelled = false;
+    const loadNotifications = async () => {
+      try {
+        const res = await fetch('/api/notifications');
+        if (!res.ok || cancelled) return;
+        const data = await res.json() as any;
+        if (!cancelled) { setNotifications(data.notifications || []); setUnreadNotifications(Number(data.unreadCount || 0)); }
+      } catch { /* notifications are optional */ }
+    };
+    loadNotifications();
+    const timer = window.setInterval(loadNotifications, 20000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [user]);
+
+  const markNotificationRead = async (notification: any) => {
+    if (!notification.read_at) {
+      await fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' }).catch(() => {});
+      setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item));
+      setUnreadNotifications((count) => Math.max(0, count - 1));
+    }
+    if (notification.order_id) navigate(`/pesanan/${notification.order_id}`);
+    setNotificationsOpen(false);
+  };
 
   // Sync search input state when URL searchParam changes
   useEffect(() => {
@@ -191,6 +226,17 @@ export const Navbar: React.FC = () => {
           )}
 
           {/* Cart Button */}
+          {user && (
+            <div className="relative">
+              <button type="button" onClick={() => setNotificationsOpen((open) => !open)} aria-label="Notifikasi" aria-expanded={notificationsOpen} className="relative w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-500">
+                <Bell className="w-5 h-5" />
+                {unreadNotifications > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 bg-rose-500 text-white font-bold text-[10px] flex items-center justify-center rounded-full">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
+              </button>
+              {notificationsOpen && <div className="absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border border-slate-700 bg-slate-950 p-3 shadow-2xl"><div className="flex items-center justify-between px-2 pb-2"><strong className="text-xs text-white">Notifikasi</strong><span className="text-[10px] text-slate-500">30 terbaru</span></div>{notifications.length === 0 ? <p className="px-2 py-5 text-center text-xs text-slate-500">Belum ada notifikasi.</p> : <div className="max-h-72 space-y-1 overflow-y-auto">{notifications.slice(0, 8).map((notification) => <button key={notification.id} type="button" onClick={() => markNotificationRead(notification)} className={`w-full rounded-xl p-2 text-left hover:bg-slate-900 ${notification.read_at ? 'opacity-60' : 'bg-indigo-950/30'}`}><span className="block text-xs font-bold text-slate-200">{notification.title}</span><span className="mt-0.5 block text-[11px] leading-relaxed text-slate-400">{notification.message}</span></button>)}</div>}</div>}
+            </div>
+          )}
+
+          {/* Cart Button */}
           <Link
             to="/keranjang"
             className="relative w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-all flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
@@ -212,8 +258,10 @@ export const Navbar: React.FC = () => {
                 <span className="text-xs font-semibold text-slate-200 truncate max-w-[120px]">
                   {user.email}
                 </span>
-                <span className="text-[10px] text-slate-400 capitalize">{user.role}</span>
+                <span className="text-[10px] text-slate-400 capitalize">{user.is_guest ? 'tamu' : user.role}</span>
+                {referralCode && <span className="text-[9px] text-indigo-300" title="Bagikan kode ini ke teman">Referral: {referralCode}</span>}
               </div>
+              {user.is_guest && <button type="button" onClick={() => openAuthModal('register')} className="hidden sm:inline-flex min-h-[40px] rounded-xl border border-amber-700/60 px-2.5 text-[10px] font-bold text-amber-300 hover:bg-amber-950/40">Amankan akun</button>}
               <button
                 onClick={logout}
                 title="Keluar"

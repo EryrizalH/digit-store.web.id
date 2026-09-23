@@ -30,11 +30,14 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   
   JWT_SECRET?: string;
+  NOTIFICATION_WEBHOOK_URL?: string;
 }
 
 export type Role = 'user' | 'admin';
 export type ProductType = 'file' | 'code' | 'herosms';
+export type DeliveryMode = 'instant' | 'manual';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
+export type DeliveryStatus = 'awaiting_payment' | 'processing' | 'fulfilled' | 'failed' | 'refunded';
 export type ActivationStatus = 'WAITING_CODE' | 'RECEIVED' | 'CANCELLED' | 'TIMEOUT' | 'COMPLETED';
 export type CreditTransactionType = 'topup' | 'topup_pending' | 'debit' | 'refund';
 
@@ -60,6 +63,8 @@ export interface User {
   password_hash?: string | null;
   role: Role;
   google_id?: string | null;
+  is_guest?: number;
+  referral_code?: string | null;
   created_at: string;
 }
 
@@ -89,9 +94,16 @@ export interface Product {
   artwork_url?: string | null;
   herosms_service?: string | null;
   herosms_country?: string | null;
+  delivery_mode?: DeliveryMode | null;
+  validity_days?: number | null;
+  low_stock_threshold?: number | null;
+  is_featured?: number;
+  sort_order?: number;
   is_active: number;
   created_at: string;
   stock_count?: number;
+  sales_count?: number;
+  is_low_stock?: boolean;
 }
 
 export interface StockCode {
@@ -99,6 +111,9 @@ export interface StockCode {
   product_id: string;
   code: string;
   is_used: number;
+  status?: 'available' | 'reserved' | 'used' | 'expired' | 'invalid' | null;
+  expires_at?: number | null;
+  invalid_reason?: string | null;
   order_id?: string | null;
   created_at: string;
 }
@@ -113,6 +128,12 @@ export interface Order {
   idempotency_key?: string | null;
   created_at: string;
   updated_at: string;
+  coupon_code?: string | null;
+  discount_amount?: number;
+  delivery_status?: DeliveryStatus;
+  failed_item_count?: number;
+  pending_item_count?: number;
+  fulfilled_item_count?: number;
 }
 
 // Public customer-facing order item (no internal provider max_price)
@@ -122,6 +143,9 @@ export interface OrderItem {
   product_id: string;
   product_name: string;
   product_type: ProductType;
+  product_slug?: string | null;
+  product_description?: string | null;
+  product_artwork_url?: string | null;
   price: number;
   quantity: number;
   service_code?: string | null;
@@ -129,7 +153,7 @@ export interface OrderItem {
   country_code?: string | null;
   country_name?: string | null;
   quote_id?: string | null;
-  fulfilment_status?: 'pending' | 'processing' | 'fulfilled' | 'failed' | null;
+  fulfilment_status?: 'pending' | 'processing' | 'fulfilled' | 'failed' | 'refunded' | null;
   fulfilment_error?: string | null;
 }
 
@@ -219,6 +243,17 @@ export interface AuditLog {
   ip_address?: string | null;
   details?: string | null;
   created_at: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  order_id: string;
+  user_id: string;
+  subject: string;
+  message: string;
+  status: 'open' | 'in_progress' | 'resolved';
+  created_at: string;
+  updated_at: string;
 }
 
 // Payment Gateway Interface

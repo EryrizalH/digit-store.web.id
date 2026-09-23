@@ -2,18 +2,21 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ArrowLeft, AlertCircle, Wallet } from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ArrowLeft, AlertCircle, Wallet, Mail } from 'lucide-react';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
   const { cart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, guestCheckout, openAuthModal } = useAuth();
 
   const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit' | 'credit'>('midtrans');
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [guestEmail, setGuestEmail] = useState('');
+  const [couponCode, setCouponCode] = useState('');
+  const [referralCode, setReferralCode] = useState('');
 
   const hasHeroSms = cart.some(item => item.product.type === 'herosms');
 
@@ -36,11 +39,6 @@ export const CartPage: React.FC = () => {
   };
 
   const handleCheckout = async () => {
-    if (!user) {
-      navigate(`/masuk?next=${encodeURIComponent('/keranjang')}`);
-      return;
-    }
-
     if (hasHeroSms && !agreedPolicy) {
       setError('Anda wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum melakukan checkout.');
       return;
@@ -50,7 +48,19 @@ export const CartPage: React.FC = () => {
     setError(null);
 
     try {
-      const idempotencyKey = `idemp_${user.id}_${Date.now()}`;
+      if (!user) {
+        if (!guestEmail.trim()) {
+          setError('Masukkan email untuk menerima akses pesanan Anda.');
+          return;
+        }
+        const guest = await guestCheckout(guestEmail.trim());
+        if (!guest.success) {
+          if (guest.error?.includes('sudah terdaftar')) openAuthModal('login');
+          throw new Error(guest.error || 'Checkout tamu gagal');
+        }
+      }
+
+      const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
       const payload = {
         items: cart.map(item => ({
           product_id: item.product.id,
@@ -63,6 +73,8 @@ export const CartPage: React.FC = () => {
         payment_provider: paymentProvider,
         idempotency_key: idempotencyKey,
         agreed_policy: agreedPolicy
+        ,coupon_code: couponCode.trim() || undefined
+        ,referral_code: referralCode.trim() || undefined
       };
 
       const res = await fetch('/api/orders/checkout', {
@@ -295,6 +307,35 @@ export const CartPage: React.FC = () => {
               )}
             </div>
 
+            {!user && (
+              <div>
+                <label htmlFor="guest-checkout-email-page" className="text-xs font-semibold text-slate-300 block mb-1.5">Email untuk akses pesanan</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="guest-checkout-email-page"
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="nama@email.com"
+                    className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-slate-500">Email baru dibuatkan sesi tamu 24 jam. Email akun lama perlu login.</p>
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="cart-page-coupon-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Kode kupon (opsional)</label>
+              <input id="cart-page-coupon-code" type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="PROMO10" className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-mono text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+            </div>
+
+            <div>
+              <label htmlFor="cart-page-referral-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Referral code (opsional)</label>
+              <input id="cart-page-referral-code" type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} placeholder="REF-AB12CD34" className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-mono text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+              <p className="mt-1 text-[10px] text-slate-500">Potongan referral 5%, maksimal Rp 10.000.</p>
+            </div>
+
             {hasHeroSms && (
               <div className="p-4 bg-purple-950/40 border border-purple-800/50 rounded-2xl text-xs space-y-2">
                 <label className="flex items-start gap-2.5 cursor-pointer text-purple-200 font-medium">
@@ -322,7 +363,7 @@ export const CartPage: React.FC = () => {
                 disabled={loading}
                 className="w-full min-h-[44px] py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
-                {loading ? 'Memproses...' : user ? 'Lanjut ke Pembayaran' : 'Masuk untuk Checkout'}
+              {loading ? 'Memproses...' : user ? 'Lanjut ke Pembayaran' : 'Checkout sebagai Tamu'}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

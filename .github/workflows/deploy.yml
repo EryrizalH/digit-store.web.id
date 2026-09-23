@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+env:
+  # Prefer sharp's platform prebuilds even when the runner exposes a global libvips.
+  SHARP_IGNORE_GLOBAL_LIBVIPS: '1'
+
 jobs:
   ci:
     name: Lint, Typecheck & Test
@@ -19,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -46,7 +50,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

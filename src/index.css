@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .invoice-page {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .invoice-sheet {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    box-shadow: none !important;
+  }
+
+  .invoice-sheet * {
+    color: #111827 !important;
+    border-color: #d1d5db !important;
+  }
+}
+
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   color-scheme: dark;
