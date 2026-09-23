@@ -1,4 +1,3 @@
-// ponytail: TopupPage for credit topup via Sumopod QRIS with balance display, presets, and transaction history
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

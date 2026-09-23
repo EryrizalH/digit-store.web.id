@@ -1,4 +1,3 @@
-// ponytail: Skeleton loader components for catalog cards and detail views
 import React from 'react';
 
 export const ProductCardSkeleton: React.FC = () => (

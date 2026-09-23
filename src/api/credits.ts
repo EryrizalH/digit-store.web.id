@@ -1,4 +1,3 @@
-// ponytail: Credits API router for balance check, topup via Sumopod, and transaction history
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env, User } from '../types';

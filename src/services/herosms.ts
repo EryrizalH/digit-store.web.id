@@ -1,5 +1,3 @@
-// ponytail: HeroSMS Client (SMS-Activate standard stub & catalog/v2 additions)
-
 export class HeroSmsError extends Error {
   constructor(public code: string, message?: string) {
     super(message || `HeroSMS provider error: ${code}`);
@@ -71,7 +69,7 @@ export class HeroSmsClient {
     const params: Record<string, string> = { lang };
     if (country) params.country = country;
     const url = this.buildUrl('getServicesList', params);
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     const text = (await res.text()).trim();
 
@@ -110,7 +108,7 @@ export class HeroSmsClient {
     }
 
     const url = this.buildUrl('getCountries');
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     const text = (await res.text()).trim();
 
@@ -169,7 +167,7 @@ export class HeroSmsClient {
     if (service) params.service = service;
     if (country) params.country = country;
     const url = this.buildUrl('getPrices', params);
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     const text = (await res.text()).trim();
 
@@ -255,7 +253,7 @@ export class HeroSmsClient {
       params.maxPrice = String(maxPrice);
     }
     const url = this.buildUrl('getNumberV2', params);
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) {
       throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     }
@@ -318,7 +316,7 @@ export class HeroSmsClient {
     }
 
     const url = this.buildUrl('getStatus', { id: activationId });
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) {
       throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     }
@@ -345,7 +343,7 @@ export class HeroSmsClient {
   async cancelActivation(activationId: string): Promise<boolean> {
     if (!this.apiKey || activationId.startsWith('act_')) return true;
     const url = this.buildUrl('setStatus', { id: activationId, status: '8' });
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) {
       throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     }
@@ -360,7 +358,7 @@ export class HeroSmsClient {
   async finishActivation(activationId: string): Promise<boolean> {
     if (!this.apiKey || activationId.startsWith('act_')) return true;
     const url = this.buildUrl('setStatus', { id: activationId, status: '6' });
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) {
       throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     }
@@ -391,7 +389,7 @@ export class HeroSmsClient {
       return '0.00 (mock)';
     }
     const url = this.buildUrl('getBalance');
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new HeroSmsError('HTTP_ERROR', `HTTP status ${res.status}`);
     const text = (await res.text()).trim();
     if (text.startsWith('ACCESS_BALANCE:')) {

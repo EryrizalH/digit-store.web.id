@@ -1,4 +1,3 @@
-// ponytail: HeroSMS activation polling, completion & cancellation with customer response sanitization (no internal cost/herosms_id leakage)
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env } from '../types';

@@ -1,4 +1,3 @@
-// ponytail: Comprehensive Vitest suite covering DTO sanitization, strict boolean policy, fail-closed catalogue, exact dev opt-in simulated pay, 60s quote lifetime, and 409 price refresh flow
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { HeroSmsClient, HeroSmsError } from '../src/services/herosms';
 import { calculateSellingPrice, otpRouter, clearOtpCaches } from '../src/api/otp';

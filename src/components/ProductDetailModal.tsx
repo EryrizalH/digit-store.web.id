@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
-import { X, Download, Key, Smartphone, ShieldAlert, ShoppingBag, Check } from 'lucide-react';
+import { X, Download, Key, Smartphone, ShieldAlert, ShoppingBag } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface ProductDetailModalProps {
   product: Product | null;
@@ -11,6 +12,9 @@ interface ProductDetailModalProps {
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product, onClose }) => {
   const { addToCart } = useCart();
   const [policyAgreed, setPolicyAgreed] = useState(false);
+
+  // ponytail: hook traps Tab/Shift+Tab, auto-focuses close button, and restores focus on close
+  const modalRef = useFocusTrap<HTMLDivElement>(Boolean(product), onClose);
 
   if (!product) return null;
 
@@ -28,11 +32,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-product-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+    >
       <div className="glass-modal w-full max-w-xl rounded-3xl p-6 sm:p-8 relative shadow-2xl border border-slate-700/50">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800 rounded-full transition-all"
+          aria-label="Tutup dialog"
+          className="absolute top-5 right-5 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800 rounded-full transition-all focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <X className="w-5 h-5" />
         </button>
@@ -58,7 +70,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
               {product.type === 'file' ? 'Digital Download' : product.type === 'code' ? 'Lisensi Voucher' : 'Aktivasi HeroSMS'}
             </span>
-            <h2 className="text-xl font-extrabold text-white">{product.name}</h2>
+            <h2 id="modal-product-title" className="text-xl font-extrabold text-white">{product.name}</h2>
           </div>
         </div>
 
@@ -78,7 +90,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
             <p className="text-purple-300/80 mb-3 leading-relaxed">
               Layanan ini disediakan hanya untuk keperluan legal. Pembeli wajib menyetujui bahwa penggunaan nomor OTP SMS tidak melanggar ketentuan hukum atau syarat layanan pihak ketiga.
             </p>
-            <label className="flex items-center gap-2.5 cursor-pointer font-medium text-purple-200 hover:text-white transition-colors">
+            <label className="flex items-center gap-2.5 cursor-pointer font-medium text-purple-200 hover:text-white transition-colors min-h-[44px]">
               <input
                 type="checkbox"
                 checked={policyAgreed}
@@ -101,7 +113,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
           <button
             onClick={handleAddToCart}
             disabled={product.type === 'code' && (product.stock_count || 0) <= 0}
-            className="px-6 py-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2"
+            className="px-6 py-3 min-h-[44px] rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <ShoppingBag className="w-5 h-5" />
             <span>Beli / Tambah Cart</span>

@@ -1,4 +1,3 @@
-// ponytail: TopupSuccessPage shown after successful Sumopod QRIS payment redirect
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, Wallet, ArrowRight } from 'lucide-react';

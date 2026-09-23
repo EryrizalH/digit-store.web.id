@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_provider TEXT NOT NULL, -- 'midtrans' | 'xendit'
   payment_status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'paid' | 'failed' | 'refunded'
   payment_id TEXT,
-  idempotency_key TEXT UNIQUE,
+  idempotency_key TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -149,11 +149,17 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed initial admin & categories if empty
+-- Seed initial categories if empty
 INSERT OR IGNORE INTO categories (id, name, slug) VALUES ('cat_software', 'Software & Script', 'software-script');
 INSERT OR IGNORE INTO categories (id, name, slug) VALUES ('cat_vouchers', 'Voucher & Lisensi', 'voucher-lisensi');
 INSERT OR IGNORE INTO categories (id, name, slug) VALUES ('cat_sms', 'Aktivasi HeroSMS', 'herosms-activation');
 
--- Default admin user password: Admin123! (hash: SHA-256 with salt demo)
-INSERT OR IGNORE INTO users (id, email, password_hash, role) VALUES 
-('usr_admin', 'admin@digit-store.web.id', 'ad158336ed607824ac64bdf29c14e52f162cbffe2d4ee5a8ae3cb325ff4fcff9:salt123', 'admin');
+-- Security and performance indexes
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_user_idempotency ON orders(user_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_stock_codes_product_used ON stock_codes(product_id, is_used);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON credit_transactions(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_txn_topup_ref ON credit_transactions(reference_id) WHERE type = 'topup';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_txn_debit_ref ON credit_transactions(reference_id) WHERE type = 'debit' AND reference_id IS NOT NULL;

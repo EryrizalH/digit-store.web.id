@@ -1,4 +1,3 @@
-// ponytail: TopupCancelPage shown when user cancels Sumopod QRIS payment
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { XCircle, RefreshCw, ArrowRight } from 'lucide-react';

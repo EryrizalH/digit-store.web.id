@@ -1,4 +1,3 @@
-// ponytail: HeroSMS OTP catalog, quote generation & admin settings with USD currency enforcement & rate limiting
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env } from '../types';

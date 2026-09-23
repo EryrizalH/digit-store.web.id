@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* ponytail: Premium Dark Mode & Mobile-First Design System */
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   color-scheme: dark;
@@ -12,7 +11,6 @@ body {
   color: #f1f5f9;
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
   min-height: 100vh;
   -webkit-tap-highlight-color: transparent;
 }
@@ -26,7 +24,7 @@ body {
 }
 
 *:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid #818cf8;
   outline-offset: 2px;
 }
 
@@ -39,31 +37,26 @@ body {
   }
 }
 
-/* Glassmorphism Utilities */
+/* Panels & Cards */
 .glass-panel {
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0d1322;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.5);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #141c2e;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.2s ease-in-out;
 }
 
 .glass-card:hover {
-  background: rgba(30, 41, 59, 0.85);
+  background: #18233a;
   border-color: rgba(99, 102, 241, 0.4);
-  box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.15);
 }
 
 .glass-modal {
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0b101c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 /* Custom Scrollbar */
@@ -82,20 +75,9 @@ body {
   background: #475569;
 }
 
-/* Glow effects */
 .glow-primary {
-  box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 4px 20px -4px rgba(99, 102, 241, 0.2);
 }
 .glow-accent {
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.4);
-}
-
-@keyframes pulse-ring {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0.8; }
-}
-
-.animate-pulse-ring {
-  animation: pulse-ring 2s infinite ease-in-out;
+  box-shadow: 0 4px 20px -4px rgba(16, 185, 129, 0.2);
 }

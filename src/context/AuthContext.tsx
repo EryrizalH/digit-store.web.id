@@ -1,4 +1,3 @@
-// ponytail: AuthContext state manager for session user
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
 

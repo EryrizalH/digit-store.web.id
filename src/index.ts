@@ -1,4 +1,3 @@
-// ponytail: Main Cloudflare Worker entry point with Hono API routing & SPA asset fallback
 import { Hono } from 'hono';
 import { Env } from './types';
 import { authRouter } from './api/auth';
@@ -25,13 +24,11 @@ api.route('/credits', creditsRouter);
 
 api.get('/health', (c) => c.json({
   status: 'ok',
-  time: new Date().toISOString(),
-  limits: {
-    workerRequests: '100,000 / day (Workers Free)',
-    d1RowsRead: '5,000,000 / day',
-    r2Bandwidth: '10 GB / month'
-  }
+  time: new Date().toISOString()
 }));
+
+// Fallback JSON 404 for unmatched API routes
+api.all('*', (c) => c.json({ error: 'API route not found' }, 404));
 
 app.route('/api', api);
 

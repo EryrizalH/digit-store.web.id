@@ -1,4 +1,3 @@
-// ponytail: Stream digital download files securely from R2 bucket via entitlement token
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env } from '../types';
@@ -43,11 +42,11 @@ downloadsRouter.get('/:token', async (c) => {
 
   const filename = entitlement.r2_key.split('/').pop() || `${entitlement.product_name}.zip`;
 
-  // Audit log download
+  // Audit log download (redacting sensitive bearer token)
   await c.env.DB.prepare(`
     INSERT INTO audit_logs (id, user_id, action, details)
     VALUES (?, ?, ?, ?)
-  `).bind(`log_${crypto.randomUUID()}`, user.id, 'DOWNLOAD_FILE', `Downloaded ${filename} via token ${token}`).run();
+  `).bind(`log_${crypto.randomUUID()}`, user.id, 'DOWNLOAD_FILE', `Downloaded ${filename} via token [REDACTED]`).run();
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);

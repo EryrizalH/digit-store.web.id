@@ -1,4 +1,3 @@
-// ponytail: CartContext state manager with 1-unit HeroSMS route lock, updateOtpQuote refresh & maxPrice localStorage sanitization
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product } from '../types';
 

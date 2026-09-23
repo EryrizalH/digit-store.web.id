@@ -1,9 +1,8 @@
-// ponytail: Route-driven orders list & detail page with per-item fulfilment badges & manual refund state
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Order, OrderItem, FileEntitlement, OrderStockAllocation, SmsActivation } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Download, Key, Smartphone, Copy, Check, Clock, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Download, Key, Smartphone, Copy, Check, Clock, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { SmsActivationViewer } from '../components/SmsActivationViewer';
 
 interface OrderDetailData {
@@ -22,7 +21,11 @@ export const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderDetail, setOrderDetail] = useState<OrderDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -33,27 +36,38 @@ export const OrdersPage: React.FC = () => {
 
   const fetchOrders = async () => {
     try {
+      setError(null);
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data = (await res.json()) as any;
         setOrders(data.orders || []);
+      } else {
+        setError('Gagal memuat data pesanan. Silakan coba lagi.');
       }
     } catch {
-      // ignore
+      setError('Terjadi kendala jaringan saat memuat pesanan.');
     } finally {
       setLoading(false);
     }
   };
 
   const fetchOrderDetail = async (orderId: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
       const res = await fetch(`/api/orders/${orderId}`);
       if (res.ok) {
         const data = (await res.json()) as any;
         setOrderDetail(data);
+      } else {
+        setOrderDetail(null);
+        setDetailError('Gagal memuat rincian pesanan. Silakan coba lagi.');
       }
     } catch {
-      // ignore
+      setOrderDetail(null);
+      setDetailError('Terjadi kendala jaringan saat memuat rincian pesanan.');
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -71,12 +85,20 @@ export const OrdersPage: React.FC = () => {
     }
   }, [user, id, orders]);
 
-
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(text);
-    setTimeout(() => setCopiedCode(null), 2000);
+  // ponytail: native safe clipboard copy with user feedback
+  const copyToClipboard = async (text: string) => {
+    try {
+      setCopyError(null);
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopiedCode(text);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      setCopyError('Gagal menyalin ke clipboard. Silakan salin manual.');
+      setTimeout(() => setCopyError(null), 4000);
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -88,6 +110,28 @@ export const OrdersPage: React.FC = () => {
       <main className="max-w-7xl mx-auto py-12 px-4 text-center text-slate-400">
         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
         Memuat data pesanan...
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="max-w-7xl mx-auto py-16 px-4 text-center">
+        <div className="glass-panel max-w-md mx-auto rounded-3xl p-8 border border-rose-800/40">
+          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+          <h3 className="text-lg font-extrabold text-white mb-2">Gagal Memuat Pesanan</h3>
+          <p className="text-xs text-slate-400 mb-6">{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchOrders();
+            }}
+            className="min-h-[44px] px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            Coba Lagi
+          </button>
+        </div>
       </main>
     );
   }
@@ -135,7 +179,7 @@ export const OrdersPage: React.FC = () => {
             >
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <span className="text-xs font-bold text-indigo-300 font-mono">{ord.id}</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                <span role="status" className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                   ord.payment_status === 'paid'
                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
@@ -160,7 +204,27 @@ export const OrdersPage: React.FC = () => {
             <ArrowLeft className="w-4 h-4" /> Kembali ke Daftar Pesanan
           </Link>
 
-          {orderDetail ? (
+          {detailLoading ? (
+            <div className="glass-panel rounded-3xl p-8 text-center text-slate-400 border border-slate-800">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+              Memuat rincian pesanan...
+            </div>
+          ) : detailError ? (
+            <div role="alert" className="glass-panel rounded-3xl p-8 text-center border border-rose-800/40">
+              <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
+              <h3 className="text-base font-extrabold text-white mb-2">Gagal Memuat Rincian Pesanan</h3>
+              <p className="text-xs text-slate-400 mb-4">{detailError}</p>
+              {id && (
+                <button
+                  type="button"
+                  onClick={() => fetchOrderDetail(id)}
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
+                  Coba Lagi
+                </button>
+              )}
+            </div>
+          ) : orderDetail ? (
             <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div>
@@ -256,6 +320,15 @@ export const OrdersPage: React.FC = () => {
                       <h4 className="text-sm font-bold text-emerald-400 flex items-center gap-2">
                         <Key className="w-4 h-4" /> Kode Lisensi / Voucher Anda
                       </h4>
+                      {copyError && (
+                        <div role="alert" className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                          <span>{copyError}</span>
+                        </div>
+                      )}
+                      <div className="sr-only" aria-live="polite">
+                        {copiedCode ? 'Kode berhasil disalin ke clipboard' : copyError ? copyError : ''}
+                      </div>
                       {orderDetail.stockCodes.map((code) => (
                         <div key={code.id} className="p-4 bg-emerald-950/30 border border-emerald-800/40 rounded-2xl flex items-center justify-between gap-3">
                           <div>
@@ -265,6 +338,7 @@ export const OrdersPage: React.FC = () => {
                             </span>
                           </div>
                           <button
+                            type="button"
                             onClick={() => copyToClipboard(code.code)}
                             className="px-3.5 min-h-[44px] rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500"
                           >

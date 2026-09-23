@@ -1,14 +1,24 @@
-// ponytail: Clean PaymentGateway interface with Midtrans & Xendit adapters
 import { PaymentGateway, CreateTransactionOptions, CreateTransactionResult, PaymentStatus } from '../types';
+
+function constantTimeStringEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 export class MidtransGateway implements PaymentGateway {
   name = 'midtrans';
   private serverKey: string;
   private isProduction: boolean;
+  private allowMock: boolean;
 
-  constructor(serverKey: string, isProduction: boolean = false) {
+  constructor(serverKey: string, isProduction: boolean = false, allowMock: boolean = false) {
     this.serverKey = serverKey;
     this.isProduction = isProduction;
+    this.allowMock = allowMock;
   }
 
   private get endpoint(): string {
@@ -19,12 +29,14 @@ export class MidtransGateway implements PaymentGateway {
 
   async createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult> {
     if (!this.serverKey) {
-      // Mock payment link for testing/demo when keys are not set
-      return {
-        paymentId: `MID-MOCK-${options.orderId}`,
-        redirectUrl: `/checkout/simulated?orderId=${options.orderId}&provider=midtrans`,
-        raw: { mock: true }
-      };
+      if (this.allowMock) {
+        return {
+          paymentId: `MID-MOCK-${options.orderId}`,
+          redirectUrl: `/checkout/simulated?orderId=${options.orderId}&provider=midtrans`,
+          raw: { mock: true }
+        };
+      }
+      throw new Error('Midtrans server key is not configured');
     }
 
     const authHeader = 'Basic ' + btoa(this.serverKey + ':');
@@ -66,7 +78,11 @@ export class MidtransGateway implements PaymentGateway {
     };
   }
 
-  async verifyWebhook(payload: any, _headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }> {
+  async verifyWebhook(payload: any, _headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }> {
+    if (!this.serverKey) {
+      throw new Error('Midtrans server key is not configured');
+    }
+
     const orderId = payload.order_id;
     const statusCode = payload.status_code;
     const grossAmount = payload.gross_amount;
@@ -74,15 +90,16 @@ export class MidtransGateway implements PaymentGateway {
     const transactionStatus = payload.transaction_status;
     const fraudStatus = payload.fraud_status;
 
-    // Verify SHA-512 signature if server key is present
-    if (this.serverKey && signatureKey) {
-      const rawStr = `${orderId}${statusCode}${grossAmount}${this.serverKey}`;
-      const encoder = new TextEncoder();
-      const hashBuf = await crypto.subtle.digest('SHA-512', encoder.encode(rawStr));
-      const computedSig = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
-      if (computedSig !== signatureKey) {
-        throw new Error('Invalid Midtrans webhook signature');
-      }
+    if (!signatureKey) {
+      throw new Error('Missing Midtrans signature_key');
+    }
+
+    const rawStr = `${orderId}${statusCode}${grossAmount}${this.serverKey}`;
+    const encoder = new TextEncoder();
+    const hashBuf = await crypto.subtle.digest('SHA-512', encoder.encode(rawStr));
+    const computedSig = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (!constantTimeStringEqual(computedSig, signatureKey)) {
+      throw new Error('Invalid Midtrans webhook signature');
     }
 
     let status: PaymentStatus = 'pending';
@@ -96,7 +113,7 @@ export class MidtransGateway implements PaymentGateway {
       status = 'refunded';
     }
 
-    return { orderId, status, paymentId: payload.transaction_id || orderId };
+    return { orderId, status, paymentId: payload.transaction_id || orderId, grossAmount: Number(grossAmount) };
   }
 }
 
@@ -104,19 +121,24 @@ export class XenditGateway implements PaymentGateway {
   name = 'xendit';
   private secretKey: string;
   private webhookToken: string;
+  private allowMock: boolean;
 
-  constructor(secretKey: string, webhookToken: string = '') {
+  constructor(secretKey: string, webhookToken: string = '', allowMock: boolean = false) {
     this.secretKey = secretKey;
     this.webhookToken = webhookToken;
+    this.allowMock = allowMock;
   }
 
   async createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult> {
     if (!this.secretKey) {
-      return {
-        paymentId: `XEN-MOCK-${options.orderId}`,
-        redirectUrl: `/checkout/simulated?orderId=${options.orderId}&provider=xendit`,
-        raw: { mock: true }
-      };
+      if (this.allowMock) {
+        return {
+          paymentId: `XEN-MOCK-${options.orderId}`,
+          redirectUrl: `/checkout/simulated?orderId=${options.orderId}&provider=xendit`,
+          raw: { mock: true }
+        };
+      }
+      throw new Error('Xendit secret key is not configured');
     }
 
     const authHeader = 'Basic ' + btoa(this.secretKey + ':');
@@ -154,9 +176,13 @@ export class XenditGateway implements PaymentGateway {
     };
   }
 
-  async verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }> {
+  async verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }> {
+    if (!this.webhookToken) {
+      throw new Error('Xendit webhook token is not configured');
+    }
+
     const callbackToken = headers['x-callback-token'] || headers['X-CALLBACK-TOKEN'];
-    if (this.webhookToken && callbackToken !== this.webhookToken) {
+    if (!callbackToken || !constantTimeStringEqual(callbackToken, this.webhookToken)) {
       throw new Error('Invalid Xendit callback token');
     }
 
@@ -170,7 +196,7 @@ export class XenditGateway implements PaymentGateway {
       status = 'failed';
     }
 
-    return { orderId, status, paymentId: payload.id || orderId };
+    return { orderId, status, paymentId: payload.id || orderId, grossAmount: Number(payload.amount) };
   }
 }
 
@@ -179,11 +205,13 @@ export class SumopodGateway implements PaymentGateway {
   private apiKey: string;
   private isProduction: boolean;
   private webhookSecret: string;
+  private allowMock: boolean;
 
-  constructor(apiKey: string, isProduction: boolean = false, webhookSecret: string = '') {
+  constructor(apiKey: string, isProduction: boolean = false, webhookSecret: string = '', allowMock: boolean = false) {
     this.apiKey = apiKey;
     this.isProduction = isProduction;
     this.webhookSecret = webhookSecret;
+    this.allowMock = allowMock;
   }
 
   private get endpoint(): string {
@@ -194,11 +222,14 @@ export class SumopodGateway implements PaymentGateway {
 
   async createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult> {
     if (!this.apiKey) {
-      return {
-        paymentId: `SUMO-MOCK-${options.orderId}`,
-        redirectUrl: `/checkout/simulated?orderId=${options.orderId}&provider=sumopod`,
-        raw: { mock: true }
-      };
+      if (this.allowMock) {
+        return {
+          paymentId: `SUMO-MOCK-${options.orderId}`,
+          redirectUrl: `/checkout/simulated?orderId=${options.orderId}&provider=sumopod`,
+          raw: { mock: true }
+        };
+      }
+      throw new Error('Sumopod API key is not configured');
     }
 
     const payload = {
@@ -233,54 +264,51 @@ export class SumopodGateway implements PaymentGateway {
     };
   }
 
-  async verifyWebhook(payload: any, headers: Record<string, string>, rawBody?: string): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }> {
-    // Verify Svix webhook signature if webhook secret is configured
-    if (this.webhookSecret) {
-      const svixId = headers['svix-id'] || headers['Svix-Id'];
-      const svixTimestamp = headers['svix-timestamp'] || headers['Svix-Timestamp'];
-      const svixSignature = headers['svix-signature'] || headers['Svix-Signature'];
+  async verifyWebhook(payload: any, headers: Record<string, string>, rawBody?: string): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }> {
+    if (!this.webhookSecret) {
+      throw new Error('Sumopod webhook secret is not configured');
+    }
 
-      if (!svixId || !svixTimestamp || !svixSignature) {
-        throw new Error('Missing Svix webhook signature headers');
-      }
+    const svixId = headers['svix-id'] || headers['Svix-Id'];
+    const svixTimestamp = headers['svix-timestamp'] || headers['Svix-Timestamp'];
+    const svixSignature = headers['svix-signature'] || headers['Svix-Signature'];
 
-      // Verify timestamp is within 5 minutes tolerance
-      const now = Math.floor(Date.now() / 1000);
-      const ts = parseInt(svixTimestamp, 10);
-      if (Math.abs(now - ts) > 300) {
-        throw new Error('Webhook timestamp too old or too far in the future');
-      }
+    if (!svixId || !svixTimestamp || !svixSignature) {
+      throw new Error('Missing Svix webhook signature headers');
+    }
 
-      // Compute expected signature: base64(HMAC-SHA256(secret, "{svix_id}.{timestamp}.{body}"))
-      // Use the raw body string for HMAC to match the exact bytes Sumopod signed
-      const secret = this.webhookSecret.startsWith('whsec_')
-        ? this.webhookSecret.slice(6)
-        : this.webhookSecret;
+    const now = Math.floor(Date.now() / 1000);
+    const ts = parseInt(svixTimestamp, 10);
+    if (Math.abs(now - ts) > 300) {
+      throw new Error('Webhook timestamp too old or too far in the future');
+    }
 
-      const bodyForSigning = rawBody || JSON.stringify(payload);
-      const signedContent = `${svixId}.${svixTimestamp}.${bodyForSigning}`;
-      const encoder = new TextEncoder();
-      const secretBytes = Uint8Array.from(atob(secret), c => c.charCodeAt(0));
-      const key = await crypto.subtle.importKey(
-        'raw',
-        secretBytes,
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-      );
-      const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(signedContent));
-      const computedSig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+    const secret = this.webhookSecret.startsWith('whsec_')
+      ? this.webhookSecret.slice(6)
+      : this.webhookSecret;
 
-      // svix-signature header may contain multiple signatures separated by spaces (versioned)
-      const signatures = svixSignature.split(' ');
-      const isValid = signatures.some(sig => {
-        const sigValue = sig.startsWith('v1,') ? sig.slice(3) : sig;
-        return sigValue === computedSig;
-      });
+    const bodyForSigning = rawBody || JSON.stringify(payload);
+    const signedContent = `${svixId}.${svixTimestamp}.${bodyForSigning}`;
+    const encoder = new TextEncoder();
+    const secretBytes = Uint8Array.from(atob(secret), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey(
+      'raw',
+      secretBytes,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sigBuf = await crypto.subtle.sign('HMAC', key, encoder.encode(signedContent));
+    const computedSig = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
 
-      if (!isValid) {
-        throw new Error('Invalid Sumopod webhook signature');
-      }
+    const signatures = svixSignature.split(' ');
+    const isValid = signatures.some(sig => {
+      const sigValue = sig.startsWith('v1,') ? sig.slice(3) : sig;
+      return constantTimeStringEqual(sigValue, computedSig);
+    });
+
+    if (!isValid) {
+      throw new Error('Invalid Sumopod webhook signature');
     }
 
     const eventType = payload.event_type;
@@ -296,16 +324,19 @@ export class SumopodGateway implements PaymentGateway {
       status = 'failed';
     }
 
-    return { orderId, status, paymentId: data.payment_id || orderId };
+    return { orderId, status, paymentId: data.payment_id || orderId, grossAmount: Number(data.amount) };
   }
 }
 
 export function getPaymentGateway(provider: string = 'midtrans', env: any): PaymentGateway {
-  if (provider.toLowerCase() === 'xendit') {
-    return new XenditGateway(env.XENDIT_SECRET_KEY || '', env.XENDIT_WEBHOOK_VERIFICATION_TOKEN || '');
+  // ponytail: require both APP_ENV === 'development' and ALLOW_MOCK_PAYMENTS === 'true' before allowing mocks
+  const allowMock = env?.APP_ENV === 'development' && env?.ALLOW_MOCK_PAYMENTS === 'true';
+  const p = (provider || '').toLowerCase();
+  if (p === 'xendit') {
+    return new XenditGateway(env?.XENDIT_SECRET_KEY || '', env?.XENDIT_WEBHOOK_VERIFICATION_TOKEN || '', allowMock);
   }
-  if (provider.toLowerCase() === 'sumopod') {
-    return new SumopodGateway(env.SUMOPOD_API_KEY || '', env.SUMOPOD_IS_PRODUCTION === 'true', env.SUMOPOD_WEBHOOK_SECRET || '');
+  if (p === 'sumopod') {
+    return new SumopodGateway(env?.SUMOPOD_API_KEY || '', env?.SUMOPOD_IS_PRODUCTION === 'true', env?.SUMOPOD_WEBHOOK_SECRET || '', allowMock);
   }
-  return new MidtransGateway(env.MIDTRANS_SERVER_KEY || '', env.MIDTRANS_IS_PRODUCTION === 'true');
+  return new MidtransGateway(env?.MIDTRANS_SERVER_KEY || '', env?.MIDTRANS_IS_PRODUCTION === 'true', allowMock);
 }

@@ -1,24 +1,45 @@
-// ponytail: Webhooks endpoint for Midtrans, Xendit, Sumopod, and HeroSMS callbacks (idempotent + safe retry on paid status)
 import { Hono } from 'hono';
 import { Env } from '../types';
 import { getPaymentGateway } from '../services/payments';
 import { fulfillOrder } from '../services/fulfilment';
-import { addCredit } from '../services/credits';
+import { timingSafeEqual } from '../services/auth';
 
 export const webhooksRouter = new Hono<{ Bindings: Env }>();
 
 // Midtrans Webhook Callback
 webhooksRouter.post('/midtrans', async (c) => {
-  const payload = await c.req.json();
+  let payload: any;
+  try {
+    payload = await c.req.json();
+  } catch {
+    return c.json({ error: 'Malformed JSON payload' }, 400);
+  }
   const headers = Object.fromEntries(c.req.raw.headers.entries());
 
   try {
     const gateway = getPaymentGateway('midtrans', c.env);
-    const { orderId, status } = await gateway.verifyWebhook(payload, headers);
+    const { orderId, status, grossAmount } = await gateway.verifyWebhook(payload, headers);
 
     const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
     if (!order) {
       return c.json({ error: 'Order not found' }, 404);
+    }
+
+    // Provider check
+    if (order.payment_provider !== 'midtrans') {
+      return c.json({ error: 'Payment provider mismatch' }, 400);
+    }
+
+    // Amount check
+    const expectedAmount = Math.round(Number(order.total_amount));
+    const paidAmount = Math.round(Number(grossAmount ?? payload.gross_amount));
+    if (expectedAmount !== paidAmount) {
+      return c.json({ error: 'Payment amount mismatch' }, 400);
+    }
+
+    // Monotonic state check: if already paid, skip duplicate fulfilment/state downgrade
+    if (order.payment_status === 'paid') {
+      return c.json({ status: 'OK' });
     }
 
     if (order.payment_status !== status) {
@@ -38,16 +59,38 @@ webhooksRouter.post('/midtrans', async (c) => {
 
 // Xendit Webhook Callback
 webhooksRouter.post('/xendit', async (c) => {
-  const payload = await c.req.json();
+  let payload: any;
+  try {
+    payload = await c.req.json();
+  } catch {
+    return c.json({ error: 'Malformed JSON payload' }, 400);
+  }
   const headers = Object.fromEntries(c.req.raw.headers.entries());
 
   try {
     const gateway = getPaymentGateway('xendit', c.env);
-    const { orderId, status } = await gateway.verifyWebhook(payload, headers);
+    const { orderId, status, grossAmount } = await gateway.verifyWebhook(payload, headers);
 
     const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
     if (!order) {
       return c.json({ error: 'Order not found' }, 404);
+    }
+
+    // Provider check
+    if (order.payment_provider !== 'xendit') {
+      return c.json({ error: 'Payment provider mismatch' }, 400);
+    }
+
+    // Amount check
+    const expectedAmount = Math.round(Number(order.total_amount));
+    const paidAmount = Math.round(Number(grossAmount ?? payload.amount));
+    if (expectedAmount !== paidAmount) {
+      return c.json({ error: 'Payment amount mismatch' }, 400);
+    }
+
+    // Monotonic state check: if already paid, skip duplicate fulfilment
+    if (order.payment_status === 'paid') {
+      return c.json({ status: 'OK' });
     }
 
     if (order.payment_status !== status) {
@@ -67,14 +110,24 @@ webhooksRouter.post('/xendit', async (c) => {
 
 // Sumopod Webhook Callback (Svix-signed)
 webhooksRouter.post('/sumopod', async (c) => {
-  // Get the raw body text first for accurate HMAC verification
-  const rawBody = await c.req.text();
-  const payload = JSON.parse(rawBody);
+  let rawBody: string;
+  try {
+    rawBody = await c.req.text();
+  } catch {
+    return c.json({ error: 'Malformed JSON payload' }, 400);
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return c.json({ error: 'Malformed JSON payload' }, 400);
+  }
   const headers = Object.fromEntries(c.req.raw.headers.entries());
 
   try {
     const gateway = getPaymentGateway('sumopod', c.env);
-    const { orderId, status, paymentId } = await gateway.verifyWebhook(payload, headers, rawBody);
+    const { orderId, status, paymentId, grossAmount } = await gateway.verifyWebhook(payload, headers, rawBody);
 
     if (!orderId) {
       return c.json({ error: 'Missing order_id in webhook payload' }, 400);
@@ -83,30 +136,51 @@ webhooksRouter.post('/sumopod', async (c) => {
     // Handle topup payments (order_id starts with TOPUP-)
     if (orderId.startsWith('TOPUP-')) {
       if (status === 'paid') {
-        // Idempotency check: if a completed topup transaction already exists, skip
+        // Idempotency check: if already completed, skip cleanly
         const existingCompleted = await c.env.DB.prepare(
           "SELECT id FROM credit_transactions WHERE reference_id = ? AND type = 'topup' LIMIT 1"
         ).bind(orderId).first<any>();
 
         if (existingCompleted) {
-          // Already credited, skip duplicate
           return c.json({ status: 'OK' });
         }
 
-        // Find the pending topup transaction
+        // Find pending topup record
         const topupTxn = await c.env.DB.prepare(
           "SELECT * FROM credit_transactions WHERE reference_id = ? AND type = 'topup_pending' LIMIT 1"
         ).bind(orderId).first<any>();
 
-        if (topupTxn) {
-          // Credit the user balance
-          await addCredit(c.env.DB, topupTxn.user_id, topupTxn.amount, 'topup', orderId, `Topup completed via Sumopod (${paymentId})`);
+        if (!topupTxn) {
+          return c.json({ status: 'OK' });
+        }
 
-          // Remove the pending tracking record (replace with the actual credited one)
-          await c.env.DB.prepare('DELETE FROM credit_transactions WHERE id = ?').bind(topupTxn.id).run();
+        // Validate paid amount against pending topup amount
+        const expectedAmount = Math.round(Number(topupTxn.amount));
+        const paidAmount = Math.round(Number(grossAmount ?? payload.data?.amount));
+        if (expectedAmount !== paidAmount) {
+          return c.json({ error: 'Topup amount mismatch' }, 400);
+        }
 
-          // Audit log
-          await c.env.DB.prepare(`
+        // Atomic claim: update pending to completed. Only the single transaction that successfully
+        // transitions 'topup_pending' -> 'topup' will see changes > 0 and proceed to credit the balance.
+        const claimResult = await c.env.DB.prepare(
+          "UPDATE credit_transactions SET type = 'topup', description = ? WHERE reference_id = ? AND type = 'topup_pending'"
+        ).bind(`Topup completed via Sumopod (${paymentId})`, orderId).run();
+
+        const changes = claimResult?.meta?.changes ?? (claimResult as any)?.changes ?? 0;
+        if (changes === 0) {
+          // Already claimed by a concurrent webhook call
+          return c.json({ status: 'OK' });
+        }
+
+        // Exactly one winner claimed the topup: increment user balance and write audit log
+        await c.env.DB.batch([
+          c.env.DB.prepare(`
+            INSERT INTO user_credits (user_id, balance, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+          `).bind(topupTxn.user_id, topupTxn.amount, topupTxn.amount),
+          c.env.DB.prepare(`
             INSERT INTO audit_logs (id, user_id, action, details)
             VALUES (?, ?, ?, ?)
           `).bind(
@@ -114,10 +188,9 @@ webhooksRouter.post('/sumopod', async (c) => {
             topupTxn.user_id,
             'CREDIT_TOPUP_COMPLETED',
             `Topup ${orderId} credited IDR ${topupTxn.amount}`
-          ).run();
-        }
+          )
+        ]);
       } else if (status === 'failed') {
-        // Clean up the pending topup transaction on failure/expiry
         await c.env.DB.prepare(
           "DELETE FROM credit_transactions WHERE reference_id = ? AND type = 'topup_pending'"
         ).bind(orderId).run();
@@ -129,6 +202,23 @@ webhooksRouter.post('/sumopod', async (c) => {
     const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
     if (!order) {
       return c.json({ error: 'Order not found' }, 404);
+    }
+
+    // Provider check
+    if (order.payment_provider !== 'sumopod') {
+      return c.json({ error: 'Payment provider mismatch' }, 400);
+    }
+
+    // Amount check
+    const expectedAmount = Math.round(Number(order.total_amount));
+    const paidAmount = Math.round(Number(grossAmount ?? payload.data?.amount));
+    if (expectedAmount !== paidAmount) {
+      return c.json({ error: 'Payment amount mismatch' }, 400);
+    }
+
+    // Monotonic state check: if already paid, skip duplicate fulfilment
+    if (order.payment_status === 'paid') {
+      return c.json({ status: 'OK' });
     }
 
     if (order.payment_status !== status) {
@@ -146,9 +236,20 @@ webhooksRouter.post('/sumopod', async (c) => {
   }
 });
 
-// HeroSMS Webhook Callback
+// HeroSMS Webhook Callback (authenticated fail-closed)
 webhooksRouter.post('/herosms', async (c) => {
-  const body = await c.req.json().catch(() => null) || {};
+  const secret = c.req.header('x-webhook-secret');
+  if (!c.env.HEROSMS_WEBHOOK_SECRET || !secret || !timingSafeEqual(secret, c.env.HEROSMS_WEBHOOK_SECRET)) {
+    return c.json({ error: 'Unauthorized HeroSMS webhook' }, 401);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Malformed JSON payload' }, 400);
+  }
+
   const activationId = body.activation_id || body.id;
   const smsCode = body.code;
   const smsText = body.text || body.full_text;

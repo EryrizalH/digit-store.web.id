@@ -1,17 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { hashPassword, verifyPassword } from '../src/services/auth';
-import { MidtransGateway, XenditGateway } from '../src/services/payments';
+import { MidtransGateway, XenditGateway, SumopodGateway } from '../src/services/payments';
 import { HeroSmsClient } from '../src/services/herosms';
 import { checkRateLimit } from '../src/services/rate-limit';
 
 describe('Digital Store Unit & Integration Tests', () => {
-  it('should hash and verify passwords correctly using Web Crypto SHA-256', async () => {
+  // ponytail: WebCrypto PBKDF2 and legacy SHA-256 fallback password verification
+  it('should hash and verify passwords correctly using PBKDF2 and legacy SHA-256 fallback', async () => {
     const password = 'SecretPassword123!';
     const hash = await hashPassword(password);
     
-    expect(hash).toContain(':');
+    expect(hash.startsWith('pbkdf2:v1:100000:')).toBe(true);
     expect(await verifyPassword(password, hash)).toBe(true);
     expect(await verifyPassword('WrongPassword', hash)).toBe(false);
+
+    // ponytail: Legacy SHA-256 salt fallback verification test
+    const salt = 'abcdef0123456789';
+    const encoder = new TextEncoder();
+    const legacyBuf = await crypto.subtle.digest('SHA-256', encoder.encode(password + salt));
+    const legacyHex = Array.from(new Uint8Array(legacyBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const legacyStoredHash = `${legacyHex}:${salt}`;
+
+    expect(await verifyPassword(password, legacyStoredHash)).toBe(true);
+    expect(await verifyPassword('WrongPassword', legacyStoredHash)).toBe(false);
+    expect(await verifyPassword(password, 'malformed-hash')).toBe(false);
   });
 
   it('should create and verify Midtrans webhook signature correctly', async () => {
@@ -39,6 +51,34 @@ describe('Digital Store Unit & Integration Tests', () => {
     const verified = await gateway.verifyWebhook(payload, {});
     expect(verified.orderId).toBe(orderId);
     expect(verified.status).toBe('paid');
+  });
+
+  it('should fail closed on invalid Midtrans webhook signature', async () => {
+    const gateway = new MidtransGateway('SB-Mid-server-TESTKEY123');
+    const badPayload = {
+      order_id: 'ORD-123456',
+      status_code: '200',
+      gross_amount: '50000.00',
+      signature_key: 'invalid_signature_hex',
+      transaction_status: 'settlement'
+    };
+    await expect(gateway.verifyWebhook(badPayload, {})).rejects.toThrow('Invalid Midtrans webhook signature');
+  });
+
+  it('should fail closed on missing or invalid Sumopod webhook signature', async () => {
+    const gateway = new SumopodGateway('api-key', false, 'whsec_dGVzdHNlY3JldA==');
+    await expect(gateway.verifyWebhook({}, {})).rejects.toThrow('Missing Svix webhook signature headers');
+  });
+
+  it('should reject unconfigured gateway when mock mode is disabled', async () => {
+    const gateway = new XenditGateway('', '', false);
+    await expect(gateway.createTransaction({
+      orderId: 'ORD-1',
+      amount: 10000,
+      customerEmail: 'test@example.com',
+      customerName: 'Test',
+      items: []
+    })).rejects.toThrow('Xendit secret key is not configured');
   });
 
   it('should verify Xendit callback token correctly', async () => {

@@ -1,4 +1,3 @@
-// ponytail: Atomic per-item order fulfilment strictly keyed by order_item_id with max_price cap verification
 import { Env } from '../types';
 import { HeroSmsClient, HeroSmsError } from './herosms';
 import { refundCredit } from './credits';
@@ -36,79 +35,132 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
       continue; // Item already claimed or processed by another request
     }
 
-    if (item.product_type === 'file') {
-      // Check existing entitlement
-      const existing = await env.DB.prepare('SELECT id FROM file_entitlements WHERE order_id = ? AND product_id = ?')
-        .bind(orderId, item.product_id).first();
+    try {
+      if (item.product_type === 'file') {
+        // Check existing entitlement
+        const existing = await env.DB.prepare('SELECT id FROM file_entitlements WHERE order_id = ? AND product_id = ?')
+          .bind(orderId, item.product_id).first();
 
-      if (!existing) {
-        const token = crypto.randomUUID().replace(/-/g, '');
-        const expiresAt = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
-        await env.DB.prepare(`
-          INSERT INTO file_entitlements (id, order_id, user_id, product_id, download_token, expires_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(`ent_${crypto.randomUUID()}`, orderId, userId, item.product_id, token, expiresAt).run();
-      }
+        if (!existing) {
+          const token = crypto.randomUUID().replace(/-/g, '');
+          const expiresAt = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days
+          await env.DB.prepare(`
+            INSERT INTO file_entitlements (id, order_id, user_id, product_id, download_token, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(`ent_${crypto.randomUUID()}`, orderId, userId, item.product_id, token, expiresAt).run();
+        }
 
-      await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
-        .bind(item.id).run();
+        await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
+          .bind(item.id).run();
 
-    } else if (item.product_type === 'code') {
-      // Check existing allocation
-      const existingAlloc = await env.DB.prepare('SELECT id FROM order_stock_allocations WHERE order_item_id = ?')
-        .bind(item.id).first();
+      } else if (item.product_type === 'code') {
+        // Check existing allocation
+        const existingAlloc = await env.DB.prepare('SELECT id FROM order_stock_allocations WHERE order_item_id = ?')
+          .bind(item.id).first();
 
-      if (!existingAlloc) {
-        const availableCodes = await env.DB.prepare(`
-          SELECT id, code FROM stock_codes
-          WHERE product_id = ? AND is_used = 0
-          LIMIT ?
-        `).bind(item.product_id, item.quantity).all<any>();
+        if (!existingAlloc) {
+          const availableCodes = await env.DB.prepare(`
+            SELECT id, code FROM stock_codes
+            WHERE product_id = ? AND is_used = 0
+            LIMIT ?
+          `).bind(item.product_id, item.quantity).all<any>();
 
-        if ((availableCodes.results || []).length < item.quantity) {
-          await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = 'Insufficient stock codes' WHERE id = ?")
+          const allocatedIds: string[] = [];
+          for (const stock of availableCodes.results || []) {
+            const updateRes = await env.DB.prepare(`
+              UPDATE stock_codes SET is_used = 1, order_id = ? WHERE id = ? AND is_used = 0
+            `).bind(orderId, stock.id).run();
+
+            if (updateRes.meta && updateRes.meta.changes > 0) {
+              await env.DB.prepare(`
+                INSERT INTO order_stock_allocations (id, order_item_id, stock_code_id, code)
+                VALUES (?, ?, ?, ?)
+              `).bind(`alloc_${crypto.randomUUID()}`, item.id, stock.id, stock.code).run();
+              allocatedIds.push(stock.id);
+              if (allocatedIds.length === item.quantity) break;
+            }
+          }
+
+          if (allocatedIds.length < item.quantity) {
+            // Revert any partially allocated codes to prevent oversell or stuck records
+            if (allocatedIds.length > 0) {
+              for (const stockId of allocatedIds) {
+                await env.DB.prepare("UPDATE stock_codes SET is_used = 0, order_id = NULL WHERE id = ?").bind(stockId).run();
+              }
+              await env.DB.prepare("DELETE FROM order_stock_allocations WHERE order_item_id = ?").bind(item.id).run();
+            }
+
+            await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = 'Insufficient stock codes' WHERE id = ?")
+              .bind(item.id).run();
+            continue;
+          }
+        }
+
+        await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
+          .bind(item.id).run();
+
+      } else if (item.product_type === 'herosms') {
+        // Strict activation lookup by order_item_id
+        const existingSms = await env.DB.prepare('SELECT id FROM sms_activations WHERE order_item_id = ?')
+          .bind(item.id).first();
+
+        if (existingSms) {
+          await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
             .bind(item.id).run();
           continue;
         }
 
-        for (const stock of availableCodes.results || []) {
-          await env.DB.prepare(`
-            UPDATE stock_codes SET is_used = 1, order_id = ? WHERE id = ? AND is_used = 0
-          `).bind(orderId, stock.id).run();
+        const service = item.service_code || item.herosms_service || 'tg';
+        const country = item.country_code || item.herosms_country || '0';
+        const maxPrice = item.max_price !== null && item.max_price !== undefined ? Number(item.max_price) : undefined;
+
+        try {
+          const res = await heroClient.getNumberV2(service, country, maxPrice);
+
+          // Validate actual returned provider cost does not exceed the server-stored max_price cap
+          if (res.activationCost !== undefined && maxPrice !== undefined && res.activationCost > maxPrice) {
+            await heroClient.cancelActivation(res.activationId).catch(() => {});
+            await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = 'PRICE_EXCEEDED_CAP' WHERE id = ?")
+              .bind(item.id).run();
+
+            await env.DB.prepare(`
+              INSERT INTO audit_logs (id, user_id, action, details)
+              VALUES (?, ?, ?, ?)
+            `).bind(
+              `log_${crypto.randomUUID()}`,
+              userId,
+              'FULFILL_OTP_ITEM_FAILED',
+              `Order item ${item.id} (${service}:${country}) returned cost ${res.activationCost} exceeding maxPrice cap ${maxPrice}`
+            ).run();
+            continue;
+          }
 
           await env.DB.prepare(`
-            INSERT INTO order_stock_allocations (id, order_item_id, stock_code_id, code)
-            VALUES (?, ?, ?, ?)
-          `).bind(`alloc_${crypto.randomUUID()}`, item.id, stock.id, stock.code).run();
-        }
-      }
+            INSERT INTO sms_activations (
+              id, order_item_id, order_id, user_id, herosms_id, herosms_phone, herosms_service, herosms_country,
+              provider_cost, provider_currency, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING_CODE')
+          `).bind(
+            `act_${crypto.randomUUID()}`,
+            item.id,
+            orderId,
+            userId,
+            res.activationId,
+            res.phone,
+            service,
+            country,
+            res.activationCost ?? maxPrice ?? 0,
+            res.currency || 'USD'
+          ).run();
 
-      await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
-        .bind(item.id).run();
-
-    } else if (item.product_type === 'herosms') {
-      // Strict activation lookup by order_item_id
-      const existingSms = await env.DB.prepare('SELECT id FROM sms_activations WHERE order_item_id = ?')
-        .bind(item.id).first();
-
-      if (existingSms) {
-        await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
-          .bind(item.id).run();
-        continue;
-      }
-
-      const service = item.service_code || item.herosms_service || 'tg';
-      const country = item.country_code || item.herosms_country || '0';
-      const maxPrice = item.max_price !== null && item.max_price !== undefined ? Number(item.max_price) : undefined;
-
-      try {
-        const res = await heroClient.getNumberV2(service, country, maxPrice);
-
-        // Validate actual returned provider cost does not exceed the server-stored max_price cap
-        if (res.activationCost !== undefined && maxPrice !== undefined && res.activationCost > maxPrice) {
-          await heroClient.cancelActivation(res.activationId).catch(() => {});
-          await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = 'PRICE_EXCEEDED_CAP' WHERE id = ?")
+          await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
             .bind(item.id).run();
+        } catch (err: any) {
+          const errDetails = err instanceof HeroSmsError ? err.code : (err.message || 'PROVIDER_UNAVAILABLE');
+
+          // Persist failure per item; payment remains 'paid'; audit log failure
+          await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = ? WHERE id = ?")
+            .bind(errDetails, item.id).run();
 
           await env.DB.prepare(`
             INSERT INTO audit_logs (id, user_id, action, details)
@@ -117,48 +169,24 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
             `log_${crypto.randomUUID()}`,
             userId,
             'FULFILL_OTP_ITEM_FAILED',
-            `Order item ${item.id} (${service}:${country}) returned cost ${res.activationCost} exceeding maxPrice cap ${maxPrice}`
+            `Order item ${item.id} (${service}:${country}) failed: ${errDetails}`
           ).run();
-          continue;
         }
-
-        await env.DB.prepare(`
-          INSERT INTO sms_activations (
-            id, order_item_id, order_id, user_id, herosms_id, herosms_phone, herosms_service, herosms_country,
-            provider_cost, provider_currency, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'WAITING_CODE')
-        `).bind(
-          `act_${crypto.randomUUID()}`,
-          item.id,
-          orderId,
-          userId,
-          res.activationId,
-          res.phone,
-          service,
-          country,
-          res.activationCost ?? maxPrice ?? 0,
-          res.currency || 'USD'
-        ).run();
-
-        await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'fulfilled' WHERE id = ?")
-          .bind(item.id).run();
-      } catch (err: any) {
-        const errDetails = err instanceof HeroSmsError ? err.code : (err.message || 'PROVIDER_UNAVAILABLE');
-
-        // Persist failure per item; payment remains 'paid'; audit log failure
-        await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = ? WHERE id = ?")
-          .bind(errDetails, item.id).run();
-
-        await env.DB.prepare(`
-          INSERT INTO audit_logs (id, user_id, action, details)
-          VALUES (?, ?, ?, ?)
-        `).bind(
-          `log_${crypto.randomUUID()}`,
-          userId,
-          'FULFILL_OTP_ITEM_FAILED',
-          `Order item ${item.id} (${service}:${country}) failed: ${errDetails}`
-        ).run();
       }
+    } catch (unhandledErr: any) {
+      // Prevent stuck 'processing' state on unexpected failure
+      const errorMsg = unhandledErr?.message || 'FULFILMENT_PROCESSING_ERROR';
+      await env.DB.prepare("UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = ? WHERE id = ?")
+        .bind(errorMsg, item.id).run();
+      await env.DB.prepare(`
+        INSERT INTO audit_logs (id, user_id, action, details)
+        VALUES (?, ?, ?, ?)
+      `).bind(
+        `log_${crypto.randomUUID()}`,
+        userId,
+        'FULFILL_ITEM_ERROR',
+        `Item ${item.id} unhandled error: ${errorMsg}`
+      ).run();
     }
   }
 

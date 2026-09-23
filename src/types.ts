@@ -9,6 +9,7 @@ export interface Env {
   APP_URL?: string;
   APP_ENV?: string;
   ALLOW_SIMULATED_PAYMENTS?: string;
+  ALLOW_MOCK_PAYMENTS?: string;
   
   MIDTRANS_SERVER_KEY?: string;
   MIDTRANS_CLIENT_KEY?: string;
@@ -23,6 +24,7 @@ export interface Env {
   
   HEROSMS_API_KEY?: string;
   HEROSMS_BASE_URL?: string;
+  HEROSMS_WEBHOOK_SECRET?: string;
   
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
@@ -239,5 +241,5 @@ export interface CreateTransactionResult {
 export interface PaymentGateway {
   name: string;
   createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult>;
-  verifyWebhook(payload: any, headers: Record<string, string>, rawBody?: string): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string }>;
+  verifyWebhook(payload: any, headers: Record<string, string>, rawBody?: string): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }>;
 }

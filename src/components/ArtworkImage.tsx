@@ -1,4 +1,3 @@
-// ponytail: Artwork image component with reserved aspect ratio, lazy loading, and SVG fallback
 import React, { useState } from 'react';
 import { Download, Key, Smartphone, Package } from 'lucide-react';
 import { ProductType } from '../types';
@@ -59,6 +58,7 @@ export const ArtworkImage: React.FC<ArtworkImageProps> = ({
           src={src}
           alt={alt}
           loading="lazy"
+          decoding="async"
           onError={() => setHasError(true)}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />

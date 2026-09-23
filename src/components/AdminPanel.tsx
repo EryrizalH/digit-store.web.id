@@ -1,4 +1,3 @@
-// ponytail: Admin Panel with Product management, Stock Code bulk import, and OTP pricing settings management
 import React, { useState, useEffect } from 'react';
 import { Product, Category, OtpSettings } from '../types';
 import { Plus, Upload, Key, Package, ShieldCheck, Image as ImageIcon, Sliders, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -233,8 +232,13 @@ export const AdminPanel: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-white">Kelola Produk, R2 & Stok Kode</h1>
         </div>
 
-        <div className="flex gap-2 bg-slate-900 p-1 rounded-2xl border border-slate-800">
+        <div role="tablist" aria-label="Admin Navigation Tabs" className="flex gap-2 bg-slate-900 p-1 rounded-2xl border border-slate-800">
           <button
+            type="button"
+            role="tab"
+            id="tab-products"
+            aria-selected={activeTab === 'products'}
+            aria-controls="panel-products"
             onClick={() => setActiveTab('products')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
               activeTab === 'products' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
@@ -243,6 +247,11 @@ export const AdminPanel: React.FC = () => {
             Produk ({products.length})
           </button>
           <button
+            type="button"
+            role="tab"
+            id="tab-stock"
+            aria-selected={activeTab === 'stock'}
+            aria-controls="panel-stock"
             onClick={() => setActiveTab('stock')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
               activeTab === 'stock' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
@@ -251,6 +260,11 @@ export const AdminPanel: React.FC = () => {
             Import Stok Kode
           </button>
           <button
+            type="button"
+            role="tab"
+            id="tab-otp"
+            aria-selected={activeTab === 'otp'}
+            aria-controls="panel-otp"
             onClick={() => setActiveTab('otp')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-[44px] ${
               activeTab === 'otp' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
@@ -262,7 +276,7 @@ export const AdminPanel: React.FC = () => {
       </div>
 
       {activeTab === 'products' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div id="panel-products" role="tabpanel" aria-labelledby="tab-products" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Create Product Form */}
           <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
             <h3 className="text-base font-extrabold text-white flex items-center gap-2">
@@ -271,8 +285,9 @@ export const AdminPanel: React.FC = () => {
 
             <form onSubmit={handleCreateProduct} className="space-y-4 text-xs">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Nama Produk</label>
+                <label htmlFor="admin-product-name" className="text-slate-300 font-semibold block mb-1">Nama Produk</label>
                 <input
+                  id="admin-product-name"
                   type="text"
                   required
                   value={name}
@@ -284,8 +299,9 @@ export const AdminPanel: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Kategori</label>
+                  <label htmlFor="admin-product-category" className="text-slate-300 font-semibold block mb-1">Kategori</label>
                   <select
+                    id="admin-product-category"
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white min-h-[44px]"
@@ -298,8 +314,9 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-slate-300 font-semibold block mb-1">Tipe Produk</label>
+                  <label htmlFor="admin-product-type" className="text-slate-300 font-semibold block mb-1">Tipe Produk</label>
                   <select
+                    id="admin-product-type"
                     value={type}
                     onChange={(e: any) => setType(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white min-h-[44px]"
@@ -312,8 +329,9 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Harga Acuan (IDR)</label>
+                <label htmlFor="admin-product-price" className="text-slate-300 font-semibold block mb-1">Harga Acuan (IDR)</label>
                 <input
+                  id="admin-product-price"
                   type="number"
                   required
                   value={price}
@@ -325,9 +343,11 @@ export const AdminPanel: React.FC = () => {
 
               {type === 'file' && (
                 <div className="p-3 bg-blue-950/40 border border-blue-800/50 rounded-xl space-y-2">
-                  <label className="text-blue-300 font-semibold block">Upload Private File to R2</label>
+                  <label htmlFor="admin-product-r2" className="text-blue-300 font-semibold block">Upload Private File to R2</label>
                   <input
+                    id="admin-product-r2"
                     type="file"
+                    accept=".zip,.rar,.7z,.tar,.gz,.pdf,.epub,.txt,.jpg,.jpeg,.png,.webp,application/zip,application/pdf"
                     onChange={handleFileUpload}
                     className="w-full text-slate-300 text-[11px]"
                   />
@@ -339,8 +359,9 @@ export const AdminPanel: React.FC = () => {
               {type === 'herosms' && (
                 <div className="p-3 bg-purple-950/40 border border-purple-800/50 rounded-xl grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-purple-300 font-semibold block">Service Default</label>
+                    <label htmlFor="admin-herosms-service" className="text-purple-300 font-semibold block">Service Default</label>
                     <input
+                      id="admin-herosms-service"
                       type="text"
                       value={herosmsService}
                       onChange={(e) => setHerosmsService(e.target.value)}
@@ -349,8 +370,9 @@ export const AdminPanel: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-purple-300 font-semibold block">Country Default</label>
+                    <label htmlFor="admin-herosms-country" className="text-purple-300 font-semibold block">Country Default</label>
                     <input
+                      id="admin-herosms-country"
                       type="text"
                       value={herosmsCountry}
                       onChange={(e) => setHerosmsCountry(e.target.value)}
@@ -362,8 +384,9 @@ export const AdminPanel: React.FC = () => {
               )}
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Deskripsi</label>
+                <label htmlFor="admin-product-description" className="text-slate-300 font-semibold block mb-1">Deskripsi</label>
                 <textarea
+                  id="admin-product-description"
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -445,7 +468,7 @@ export const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'stock' && (
-        <div className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-4">
+        <div id="panel-stock" role="tabpanel" aria-labelledby="tab-stock" className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-4">
           <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
             <Key className="w-5 h-5 text-emerald-400" /> Import Stok Kode Voucher Bulk
           </h3>
@@ -458,8 +481,9 @@ export const AdminPanel: React.FC = () => {
 
           <form onSubmit={handleAddStockCodes} className="space-y-4 text-xs">
             <div>
-              <label className="text-slate-300 font-semibold block mb-1">Pilih Produk Tipe Code</label>
+              <label htmlFor="admin-stock-product" className="text-slate-300 font-semibold block mb-1">Pilih Produk Tipe Code</label>
               <select
+                id="admin-stock-product"
                 required
                 value={selectedProductId}
                 onChange={(e) => setSelectedProductId(e.target.value)}
@@ -473,8 +497,9 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-slate-300 font-semibold block mb-1">Daftar Kode (1 Kode per Baris)</label>
+              <label htmlFor="admin-stock-codes" className="text-slate-300 font-semibold block mb-1">Daftar Kode (1 Kode per Baris)</label>
               <textarea
+                id="admin-stock-codes"
                 rows={8}
                 required
                 value={bulkCodesText}
@@ -495,7 +520,7 @@ export const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'otp' && (
-        <div className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-5">
+        <div id="panel-otp" role="tabpanel" aria-labelledby="tab-otp" className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-5">
           <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
             <Sliders className="w-5 h-5 text-purple-400" /> Pengaturan Harga HeroSMS OTP
           </h3>
@@ -523,9 +548,13 @@ export const AdminPanel: React.FC = () => {
                 <span className="font-bold text-white block">Status Konfigurator OTP</span>
                 <span className="text-[11px] text-slate-400">Aktifkan untuk mengizinkan pembelian nomor OTP di toko.</span>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
+              <label htmlFor="admin-otp-status" className="relative inline-flex items-center cursor-pointer">
                 <input
+                  id="admin-otp-status"
                   type="checkbox"
+                  role="switch"
+                  aria-checked={otpEnabled}
+                  aria-label="Status Konfigurator OTP"
                   checked={otpEnabled}
                   onChange={(e) => setOtpEnabled(e.target.checked)}
                   className="sr-only peer"
@@ -536,8 +565,9 @@ export const AdminPanel: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Biaya HeroSMS (USD)</label>
+                <label htmlFor="admin-otp-currency" className="text-slate-300 font-semibold block mb-1">Biaya HeroSMS (USD)</label>
                 <input
+                  id="admin-otp-currency"
                   type="text"
                   readOnly
                   disabled
@@ -547,8 +577,9 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Kurs 1 USD ke IDR</label>
+                <label htmlFor="admin-otp-rate" className="text-slate-300 font-semibold block mb-1">Kurs 1 USD ke IDR</label>
                 <input
+                  id="admin-otp-rate"
                   type="number"
                   required
                   step="any"
@@ -563,8 +594,9 @@ export const AdminPanel: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Margin (%)</label>
+                <label htmlFor="admin-otp-markup" className="text-slate-300 font-semibold block mb-1">Margin (%)</label>
                 <input
+                  id="admin-otp-markup"
                   type="number"
                   required
                   step="any"
@@ -577,8 +609,9 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-slate-300 font-semibold block mb-1">Harga minimum IDR</label>
+                <label htmlFor="admin-otp-min-price" className="text-slate-300 font-semibold block mb-1">Harga minimum IDR</label>
                 <input
+                  id="admin-otp-min-price"
                   type="number"
                   required
                   step="any"

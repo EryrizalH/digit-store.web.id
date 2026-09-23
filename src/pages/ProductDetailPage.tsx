@@ -1,4 +1,3 @@
-// ponytail: Product detail page for file/code digital products; redirects herosms to canonical configurator
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, Navigate } from 'react-router-dom';
 import { Product } from '../types';
@@ -138,7 +137,7 @@ export const ProductDetailPage: React.FC = () => {
       </div>
 
       {/* Sticky Mobile CTA Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 p-4 bg-[#090d16]/95 border-t border-slate-800/90 backdrop-blur-xl sm:relative sm:bg-transparent sm:border-none sm:p-0">
+      <div className="fixed bottom-0 left-0 right-0 z-30 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#090d16]/95 border-t border-slate-800/90 backdrop-blur-xl sm:relative sm:bg-transparent sm:border-none sm:p-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <div>
             <span className="text-[10px] text-slate-400 block uppercase font-bold">Harga Produk</span>

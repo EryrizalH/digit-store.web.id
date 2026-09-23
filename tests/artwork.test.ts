@@ -1,4 +1,3 @@
-// ponytail: Focused unit & integration tests for artwork upload auth, validation, visibility, and private key non-leakage
 import { describe, it, expect, vi } from 'vitest';
 import app from '../src/index';
 import { Env } from '../src/types';

@@ -1,4 +1,3 @@
-// ponytail: CartPage supporting dynamic OTP route keying & 409 stale price change handling
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart, getCartItemKey } from '../context/CartContext';

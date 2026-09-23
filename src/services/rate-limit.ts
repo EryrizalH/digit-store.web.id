@@ -1,5 +1,3 @@
-// ponytail: Simple KV sliding rate limiter
-
 export interface RateLimitResult {
   success: boolean;
   limit: number;
@@ -13,36 +11,42 @@ export async function checkRateLimit(
   limit: number = 60,
   windowSeconds: number = 60
 ): Promise<RateLimitResult> {
+  const safeLimit = Math.max(1, Math.floor(Number(limit) || 60));
+  const safeWindow = Math.max(1, Math.min(86400, Math.floor(Number(windowSeconds) || 60)));
+  const sanitizedKey = (key || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+
   if (!kv) {
-    return { success: true, limit, remaining: limit - 1, resetSeconds: windowSeconds };
+    return { success: true, limit: safeLimit, remaining: safeLimit - 1, resetSeconds: safeWindow };
   }
 
-  const currentWindow = Math.floor(Date.now() / 1000 / windowSeconds);
-  const kvKey = `rl:${key}:${currentWindow}`;
+  const currentWindow = Math.floor(Date.now() / 1000 / safeWindow);
+  const kvKey = `rl:${sanitizedKey}:${currentWindow}`;
 
   try {
     const rawCount = await kv.get(kvKey);
     const count = rawCount ? parseInt(rawCount, 10) : 0;
 
-    if (count >= limit) {
+    if (count >= safeLimit) {
       return {
         success: false,
-        limit,
+        limit: safeLimit,
         remaining: 0,
-        resetSeconds: windowSeconds - (Math.floor(Date.now() / 1000) % windowSeconds)
+        resetSeconds: safeWindow - (Math.floor(Date.now() / 1000) % safeWindow)
       };
     }
 
-    await kv.put(kvKey, (count + 1).toString(), { expirationTtl: windowSeconds * 2 });
+    // Cloudflare KV minimum TTL is 60 seconds
+    const expirationTtl = Math.max(60, safeWindow * 2);
+    await kv.put(kvKey, (count + 1).toString(), { expirationTtl });
 
     return {
       success: true,
-      limit,
-      remaining: limit - (count + 1),
-      resetSeconds: windowSeconds - (Math.floor(Date.now() / 1000) % windowSeconds)
+      limit: safeLimit,
+      remaining: safeLimit - (count + 1),
+      resetSeconds: safeWindow - (Math.floor(Date.now() / 1000) % safeWindow)
     };
   } catch (err) {
     // Fail open in case of KV temporary error
-    return { success: true, limit, remaining: 1, resetSeconds: windowSeconds };
+    return { success: true, limit: safeLimit, remaining: 1, resetSeconds: safeWindow };
   }
 }

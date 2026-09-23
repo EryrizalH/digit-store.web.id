@@ -1,8 +1,8 @@
-// ponytail: CartDrawer with HeroSMS route info, dynamic item keys & 409 price change handling
 import React, { useState } from 'react';
 import { X, Trash2, Plus, Minus, CreditCard, ArrowRight, AlertCircle } from 'lucide-react';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface CartDrawerProps {
   onSuccessOrder: (orderId: string) => void;
@@ -16,6 +16,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ponytail: hook traps Tab/Shift+Tab, auto-focuses close button, and restores focus on close
+  const drawerRef = useFocusTrap<HTMLDivElement>(isCartOpen, closeCart);
 
   if (!isCartOpen) return null;
 
@@ -73,26 +76,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
             quoteId: fresh.quoteId
           });
           const formattedPrice = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(fresh.freshSellingPrice);
-          setError(`Harga OTP untuk rute ${fresh.serviceCode} (${fresh.countryCode}) telah diperbarui menjadi ${formattedPrice}. Silakan tekan tombol Checkout lagi untuk mengonfirmasi.`);
-        } else {
-          setError(data.error || 'Harga layanan OTP telah diperbarui. Silakan tekan Checkout lagi untuk konfirmasi.');
+          setError(`Harga rute OTP telah diperbarui menjadi ${formattedPrice}. Silakan tinjau dan klik Bayar Sekarang.`);
+          return;
         }
-        return;
       }
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Checkout gagal');
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal membuat pesanan');
       }
 
       clearCart();
       closeCart();
 
       if (data.redirectUrl) {
-        if (data.redirectUrl.startsWith('http')) {
-          window.location.href = data.redirectUrl;
-        } else {
-          onSuccessOrder(data.orderId);
-        }
+        window.location.href = data.redirectUrl;
       } else {
         onSuccessOrder(data.orderId);
       }
@@ -104,12 +101,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm">
+    <div
+      ref={drawerRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cart-drawer-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm"
+    >
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
         <div className="w-screen max-w-md glass-modal border-l border-slate-800 shadow-2xl flex flex-col justify-between">
           {/* Header */}
           <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-            <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
+            <h2 id="cart-drawer-title" className="text-lg font-extrabold text-white flex items-center gap-2">
               <span>Keranjang Belanja</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
                 {cart.length} item
@@ -117,7 +121,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
             </h2>
             <button
               onClick={closeCart}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              aria-label="Tutup keranjang belanja"
+              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
               <X className="w-5 h-5" />
             </button>
@@ -133,7 +138,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
             )}
 
             {cart.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
+              <div className="text-center py-16 text-slate-400 text-sm">
                 Keranjang Anda masih kosong.
               </div>
             ) : (
@@ -160,7 +165,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {item.product.type === 'herosms' ? (
                         <span className="text-xs font-bold text-purple-300 px-2 py-1 bg-purple-950/60 border border-purple-800/40 rounded-lg">
                           1x
@@ -169,27 +174,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                         <>
                           <button
                             onClick={() => updateQuantity(itemKey, item.quantity - 1)}
-                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                            aria-label="Kurangi jumlah"
+                            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500"
                           >
-                            <Minus className="w-3.5 h-3.5" />
+                            <Minus className="w-4 h-4" />
                           </button>
-                          <span className="text-xs font-bold text-white w-5 text-center">
+                          <span className="text-xs font-bold text-white w-6 text-center">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => updateQuantity(itemKey, item.quantity + 1)}
-                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                            aria-label="Tambah jumlah"
+                            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500"
                           >
-                            <Plus className="w-3.5 h-3.5" />
+                            <Plus className="w-4 h-4" />
                           </button>
                         </>
                       )}
                       <button
                         onClick={() => removeFromCart(itemKey)}
-                        className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 ml-1"
-                        title="Hapus Rute"
+                        aria-label="Hapus item dari keranjang"
+                        className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 ml-1 focus-visible:ring-2 focus-visible:ring-indigo-500"
+                        title="Hapus item"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -201,14 +209,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
               <div className="pt-4 border-t border-slate-800 space-y-4">
                 {/* Payment Gateway Selection */}
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-2">
+                  <span className="text-xs font-semibold text-slate-300 block mb-2">
                     Pilih Gateway Pembayaran:
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  </span>
+                  <div role="radiogroup" aria-label="Pilih Gateway Pembayaran" className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={paymentProvider === 'midtrans'}
                       onClick={() => setPaymentProvider('midtrans')}
-                      className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                         paymentProvider === 'midtrans'
                           ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
                           : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
@@ -218,8 +228,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                     </button>
                     <button
                       type="button"
+                      role="radio"
+                      aria-checked={paymentProvider === 'xendit'}
                       onClick={() => setPaymentProvider('xendit')}
-                      className={`p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                         paymentProvider === 'xendit'
                           ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
                           : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
@@ -232,7 +244,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
 
                 {hasHeroSms && (
                   <div className="p-3 bg-purple-950/30 border border-purple-800/40 rounded-xl text-xs">
-                    <label className="flex items-start gap-2 cursor-pointer text-purple-200">
+                    <label className="flex items-start gap-2 cursor-pointer text-purple-200 min-h-[44px]">
                       <input
                         type="checkbox"
                         checked={agreedPolicy}
@@ -260,7 +272,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
               <button
                 onClick={handleCheckout}
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3.5 min-h-[44px] rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 {loading ? 'Memproses...' : user ? 'Bayar Sekarang' : 'Login untuk Checkout'}
                 <ArrowRight className="w-4 h-4" />

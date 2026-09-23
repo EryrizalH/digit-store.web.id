@@ -1,4 +1,3 @@
-// ponytail: Products & Catalog router with stock calculation, artwork streaming, and R2 uploads
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env, User } from '../types';
@@ -17,7 +16,6 @@ async function requireAdmin(c: any, next: any) {
   await next();
 }
 
-// ponytail: Explicit allowlist projection for public responses — excludes r2_key and image_key
 function formatPublicProduct(p: any) {
   if (!p) return null;
   return {
@@ -44,11 +42,19 @@ productsRouter.get('/categories', async (c) => {
   return c.json({ categories: res.results || [] });
 });
 
-// List Products (Public Catalog)
+// List Products (Public Catalog, or all products for admin)
 productsRouter.get('/', async (c) => {
   const categorySlug = c.req.query('category');
   const search = c.req.query('q');
   const includeAll = c.req.query('include_all') === '1';
+
+  if (includeAll) {
+    const sessionId = getCookie(c, 'session');
+    const user = await getSessionUser(c.env.DB, sessionId || '');
+    if (!user || user.role !== 'admin') {
+      return c.json({ error: 'Unauthorized. Admin access required.' }, 403);
+    }
+  }
 
   let query = `
     SELECT p.id, p.category_id, p.name, p.slug, p.description, p.price, p.type, p.image_key, p.herosms_service, p.herosms_country, p.is_active, p.created_at,
@@ -137,8 +143,18 @@ productsRouter.post('/admin', requireAdmin, async (c) => {
   const body = await c.req.json();
   const { category_id, name, slug, description, price, type, r2_key, image_key, herosms_service, herosms_country } = body;
 
-  if (!name || !slug || !price || !type) {
+  if (!name || !slug || price === undefined || !type) {
     return c.json({ error: 'Name, slug, price, and type are required' }, 400);
+  }
+
+  const validTypes = ['file', 'code', 'herosms'];
+  if (!validTypes.includes(type)) {
+    return c.json({ error: 'Invalid product type. Must be file, code, or herosms' }, 400);
+  }
+
+  const numPrice = Number(price);
+  if (!Number.isFinite(numPrice) || numPrice <= 0) {
+    return c.json({ error: 'Price must be a positive finite number' }, 400);
   }
 
   const id = `prd_${crypto.randomUUID()}`;
@@ -146,7 +162,7 @@ productsRouter.post('/admin', requireAdmin, async (c) => {
     INSERT INTO products (id, category_id, name, slug, description, price, type, r2_key, image_key, herosms_service, herosms_country)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    id, category_id || null, name, slug.toLowerCase(), description || '', price, type, r2_key || null, image_key || null, herosms_service || null, herosms_country || null
+    id, category_id || null, name, slug.toLowerCase(), description || '', numPrice, type, r2_key || null, image_key || null, herosms_service || null, herosms_country || null
   ).run();
 
   return c.json({ success: true, id });
@@ -158,13 +174,26 @@ productsRouter.put('/admin/:id', requireAdmin, async (c) => {
   const body = await c.req.json();
   const { category_id, name, slug, description, price, type, r2_key, image_key, herosms_service, herosms_country, is_active } = body;
 
+  const validTypes = ['file', 'code', 'herosms'];
+  if (type && !validTypes.includes(type)) {
+    return c.json({ error: 'Invalid product type' }, 400);
+  }
+
+  let numPrice = price;
+  if (price !== undefined) {
+    numPrice = Number(price);
+    if (!Number.isFinite(numPrice) || numPrice <= 0) {
+      return c.json({ error: 'Price must be a positive finite number' }, 400);
+    }
+  }
+
   await c.env.DB.prepare(`
     UPDATE products SET
       category_id = ?, name = ?, slug = ?, description = ?, price = ?, type = ?,
       r2_key = ?, image_key = COALESCE(?, image_key), herosms_service = ?, herosms_country = ?, is_active = ?
     WHERE id = ?
   `).bind(
-    category_id || null, name, slug, description, price, type,
+    category_id || null, name, slug, description, numPrice, type,
     r2_key || null, image_key || null, herosms_service || null, herosms_country || null, is_active ?? 1, id
   ).run();
 
@@ -217,37 +246,87 @@ productsRouter.post('/admin/:id/artwork', requireAdmin, async (c) => {
   });
 });
 
-// Admin: Upload Stock Codes in Bulk
+// Admin: Upload Stock Codes in Bulk (max 500 items)
 productsRouter.post('/admin/stock', requireAdmin, async (c) => {
   const { product_id, codes } = await c.req.json();
   if (!product_id || !Array.isArray(codes) || codes.length === 0) {
     return c.json({ error: 'product_id and array of codes required' }, 400);
   }
 
+  if (codes.length > 500) {
+    return c.json({ error: 'Maksimal 500 kode per batch' }, 400);
+  }
+
+  const cleanCodes = codes.map((code: any) => String(code).trim()).filter(Boolean);
+  if (cleanCodes.length === 0) {
+    return c.json({ error: 'No valid codes provided' }, 400);
+  }
+
   const stmt = c.env.DB.prepare(
     'INSERT INTO stock_codes (id, product_id, code) VALUES (?, ?, ?)'
   );
 
-  const batch = codes.map((code: string) => stmt.bind(`stk_${crypto.randomUUID()}`, product_id, code.trim()));
+  const batch = cleanCodes.map((code: string) => stmt.bind(`stk_${crypto.randomUUID()}`, product_id, code));
   await c.env.DB.batch(batch);
 
-  return c.json({ success: true, added: codes.length });
+  return c.json({ success: true, added: cleanCodes.length });
 });
 
-// Admin: Upload File to R2 (Private digital download file)
+// Admin: Upload File to R2 (Private digital download file, max 50MB, sanitized filename, safe MIME allowlist)
 productsRouter.post('/admin/upload-file', requireAdmin, async (c) => {
-  const formData = await c.req.formData();
-  const file = formData.get('file') as File;
+  let formData;
+  try {
+    formData = await c.req.formData();
+  } catch {
+    return c.json({ error: 'Invalid form data' }, 400);
+  }
+
+  const file = formData.get('file') as File | null;
   if (!file) {
     return c.json({ error: 'No file uploaded' }, 400);
   }
 
-  const key = `files/${crypto.randomUUID()}-${file.name}`;
+  const MAX_SIZE = 50 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    return c.json({ error: 'File size exceeds 50MB limit' }, 400);
+  }
+
+  const ALLOWED_MIME_TYPES = new Set([
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-rar-compressed',
+    'application/vnd.rar',
+    'application/x-7z-compressed',
+    'application/gzip',
+    'application/x-tar',
+    'application/pdf',
+    'application/epub+zip',
+    'text/plain',
+    'image/jpeg',
+    'image/png',
+    'image/webp'
+  ]);
+
+  const ALLOWED_EXTENSIONS = new Set([
+    'zip', 'rar', '7z', 'gz', 'tar', 'pdf', 'epub', 'txt', 'png', 'jpg', 'jpeg', 'webp'
+  ]);
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const ext = safeName.split('.').pop()?.toLowerCase() || '';
+
+  const fileMime = (file.type || '').toLowerCase();
+  if (!ALLOWED_MIME_TYPES.has(fileMime) || !ALLOWED_EXTENSIONS.has(ext)) {
+    return c.json({
+      error: 'Tipe file tidak diizinkan. Format yang didukung: ZIP, RAR, 7Z, TAR, GZ, PDF, EPUB, TXT, JPG, PNG, WebP.'
+    }, 400);
+  }
+
+  const key = `files/${crypto.randomUUID()}-${safeName}`;
   const buffer = await file.arrayBuffer();
 
   await c.env.FILES_BUCKET.put(key, buffer, {
     httpMetadata: { contentType: file.type }
   });
 
-  return c.json({ success: true, r2_key: key, filename: file.name });
+  return c.json({ success: true, r2_key: key, filename: safeName });
 });

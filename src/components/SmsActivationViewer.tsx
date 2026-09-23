@@ -1,4 +1,3 @@
-// ponytail: SMS Activation status viewer supporting polling, cancellation, explicit setStatus=6 completion, and COMPLETED state
 import React, { useEffect, useState, useRef } from 'react';
 import { Smartphone, RefreshCw, Copy, Check, Clock, AlertTriangle, XCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { SmsActivation } from '../types';
@@ -55,11 +54,16 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
     };
   }, [activationId, activation?.status, error]);
 
-  const handleCopyCode = () => {
+  // ponytail: native safe clipboard copy with graceful failure
+  const handleCopyCode = async () => {
     if (activation?.sms_code) {
-      navigator.clipboard.writeText(activation.sms_code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(activation.sms_code);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // ignore clipboard error
+      }
     }
   };
 
@@ -126,8 +130,9 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
           <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" /> {error}
         </div>
         <button
+          type="button"
           onClick={handleRetry}
-          className="text-[10px] underline hover:text-white shrink-0 font-bold"
+          className="min-h-[44px] px-3 flex items-center text-xs underline hover:text-white shrink-0 font-bold focus:outline-none focus:ring-2 focus:ring-rose-400 rounded-lg"
         >
           Coba lagi
         </button>
@@ -146,8 +151,9 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
             <span>{error}</span>
           </div>
           <button
+            type="button"
             onClick={handleRetry}
-            className="text-[10px] underline hover:text-white shrink-0 font-bold"
+            className="min-h-[44px] px-3 flex items-center text-xs underline hover:text-white shrink-0 font-bold focus:outline-none focus:ring-2 focus:ring-rose-400 rounded-lg"
           >
             Coba lagi
           </button>
@@ -167,7 +173,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
           </div>
         </div>
 
-        <div>
+        <div role="status" aria-live="polite">
           {activation.status === 'WAITING_CODE' && (
             <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1.5 animate-pulse-ring">
               <Clock className="w-3.5 h-3.5 animate-spin" /> Menunggu SMS...
@@ -213,8 +219,9 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleCopyCode}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-400"
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 <span>{copied ? 'Tersalin!' : 'Salin OTP'}</span>
@@ -222,9 +229,10 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
 
               {activation.status === 'RECEIVED' && (
                 <button
+                  type="button"
                   onClick={handleComplete}
                   disabled={completing}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md"
+                  className="min-h-[44px] px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 >
                   <CheckCircle2 className="w-4 h-4 text-emerald-300" />
                   <span>{completing ? 'Memproses...' : 'Selesai'}</span>
@@ -239,9 +247,10 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
             Sistem otomatis mengecek SMS masuk setiap 3 detik. Silakan kirimkan SMS OTP ke nomor di atas.
           </span>
           <button
+            type="button"
             onClick={handleCancel}
             disabled={cancelling}
-            className="px-3 py-1.5 rounded-lg bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900 transition-all shrink-0 ml-3 disabled:opacity-50"
+            className="min-h-[44px] px-4 py-2 rounded-xl bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900 transition-all shrink-0 ml-3 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-rose-400"
           >
             {cancelling ? 'Membatalkan...' : 'Batalkan'}
           </button>

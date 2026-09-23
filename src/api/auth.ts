@@ -1,4 +1,3 @@
-// ponytail: Hono auth router (email/pass, sessions, Google OAuth)
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { Env, User } from '../types';
@@ -102,21 +101,71 @@ authRouter.get('/me', async (c) => {
   return c.json({ user });
 });
 
-// Google OAuth Redirect
-authRouter.get('/google', (c) => {
+// ponytail: Standard WebCrypto base64url encoder for PKCE
+function base64UrlEncode(buffer: Uint8Array): string {
+  let str = '';
+  for (let i = 0; i < buffer.byteLength; i++) {
+    str += String.fromCharCode(buffer[i]);
+  }
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function generatePkceChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', encoder.encode(verifier));
+  return base64UrlEncode(new Uint8Array(hash));
+}
+
+// Google OAuth Redirect with state and PKCE
+authRouter.get('/google', async (c) => {
   const clientId = c.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     return c.json({ error: 'Google OAuth not configured' }, 400);
   }
+
+  const state = crypto.randomUUID();
+  const verifierBytes = crypto.getRandomValues(new Uint8Array(32));
+  const codeVerifier = base64UrlEncode(verifierBytes);
+  const codeChallenge = await generatePkceChallenge(codeVerifier);
+
+  setCookie(c, 'oauth_state', state, {
+    httpOnly: true,
+    secure: c.env.APP_ENV !== 'development',
+    sameSite: 'Lax',
+    path: '/api/auth/google',
+    maxAge: 600
+  });
+
+  setCookie(c, 'oauth_code_verifier', codeVerifier, {
+    httpOnly: true,
+    secure: c.env.APP_ENV !== 'development',
+    sameSite: 'Lax',
+    path: '/api/auth/google',
+    maxAge: 600
+  });
+
   const redirectUri = `${c.env.APP_URL || 'http://localhost:5173'}/api/auth/google/callback`;
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile`;
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile&state=${state}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
   return c.redirect(url);
 });
 
-// Google OAuth Callback
+// Google OAuth Callback with state, PKCE verifier, and verified email check
 authRouter.get('/google/callback', async (c) => {
   const code = c.req.query('code');
+  const state = c.req.query('state');
+  const storedState = getCookie(c, 'oauth_state');
+  const codeVerifier = getCookie(c, 'oauth_code_verifier');
+
+  deleteCookie(c, 'oauth_state', { path: '/api/auth/google' });
+  deleteCookie(c, 'oauth_code_verifier', { path: '/api/auth/google' });
+
   if (!code) return c.text('OAuth Code missing', 400);
+  if (!state || !storedState || state !== storedState) {
+    return c.text('Invalid or missing OAuth state', 400);
+  }
+  if (!codeVerifier) {
+    return c.text('Missing OAuth code verifier', 400);
+  }
 
   const clientId = c.env.GOOGLE_CLIENT_ID;
   const clientSecret = c.env.GOOGLE_CLIENT_SECRET;
@@ -131,8 +180,10 @@ authRouter.get('/google/callback', async (c) => {
         client_id: clientId || '',
         client_secret: clientSecret || '',
         redirect_uri: redirectUri,
-        grant_type: 'authorization_code'
-      })
+        grant_type: 'authorization_code',
+        code_verifier: codeVerifier
+      }),
+      signal: AbortSignal.timeout(10000)
     });
 
     const tokenData: any = await tokenRes.json();
@@ -141,9 +192,14 @@ authRouter.get('/google/callback', async (c) => {
     }
 
     const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` }
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(10000)
     });
     const userInfo: any = await userRes.json();
+
+    if (!userInfo.email_verified) {
+      return c.text('Google account email is not verified', 400);
+    }
 
     let user = await c.env.DB.prepare('SELECT * FROM users WHERE google_id = ? OR email = ?')
       .bind(userInfo.id, userInfo.email.toLowerCase())

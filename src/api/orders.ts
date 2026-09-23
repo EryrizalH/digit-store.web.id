@@ -1,4 +1,3 @@
-// ponytail: Orders & Checkout router with strict policy check, fail-closed catalogue validation, 60s quote bounds, and opt-in simulated pay
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env, User } from '../types';
@@ -37,10 +36,10 @@ ordersRouter.post('/checkout', async (c) => {
     return c.json({ error: 'Cart items required' }, 400);
   }
 
-  // Handle Idempotency Key
+  // Handle Idempotency Key (scoped to user)
   if (idempotency_key) {
-    const existingOrder = await c.env.DB.prepare('SELECT id, payment_status FROM orders WHERE idempotency_key = ?')
-      .bind(idempotency_key).first<any>();
+    const existingOrder = await c.env.DB.prepare('SELECT id, payment_status FROM orders WHERE user_id = ? AND idempotency_key = ?')
+      .bind(user.id, idempotency_key).first<any>();
     if (existingOrder) {
       return c.json({ success: true, orderId: existingOrder.id, message: 'Existing order returned (idempotent)' });
     }
@@ -186,7 +185,16 @@ ordersRouter.post('/checkout', async (c) => {
         quote_id: serverQuoteId // Server-generated quote ID
       });
     } else {
-      const qty = Math.max(1, parseInt(item.quantity || 1, 10));
+      const rawQty = item.quantity;
+      const qty = parseInt(rawQty, 10);
+      if (isNaN(qty) || qty < 1 || qty > 100) {
+        return c.json({ error: 'Kuantitas tidak valid (1-100).' }, 400);
+      }
+
+      const itemPrice = Number(product.price);
+      if (!Number.isFinite(itemPrice) || itemPrice <= 0) {
+        return c.json({ error: 'Harga produk tidak valid.' }, 400);
+      }
 
       if (product.type === 'code') {
         const stockRes = await c.env.DB.prepare('SELECT COUNT(*) as count FROM stock_codes WHERE product_id = ? AND is_used = 0')
@@ -196,7 +204,6 @@ ordersRouter.post('/checkout', async (c) => {
         }
       }
 
-      const itemPrice = Number(product.price);
       totalAmount += itemPrice * qty;
       validatedItems.push({
         product,
@@ -206,8 +213,13 @@ ordersRouter.post('/checkout', async (c) => {
     }
   }
 
-  const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const allowedProviders = ['midtrans', 'xendit', 'sumopod', 'credit'];
   const provider = payment_provider || c.env.PAYMENT_PROVIDER || 'midtrans';
+  if (!allowedProviders.includes(provider)) {
+    return c.json({ error: 'Metode pembayaran tidak valid.' }, 400);
+  }
+
+  const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // Create Order in D1
   await c.env.DB.prepare(`
@@ -375,6 +387,10 @@ ordersRouter.post('/:id/simulated-pay', async (c) => {
   const orderId = c.req.param('id');
   const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
   if (!order) return c.json({ error: 'Order not found' }, 404);
+
+  if (order.user_id !== user.id && user.role !== 'admin') {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
 
   // Update order status to paid
   await c.env.DB.prepare("UPDATE orders SET payment_status = 'paid', updated_at = CURRENT_TIMESTAMP WHERE id = ?")

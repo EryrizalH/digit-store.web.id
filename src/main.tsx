@@ -1,4 +1,3 @@
-// ponytail: React entry point wrapped with BrowserRouter for SPA routing
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

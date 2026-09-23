@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, closeAuthModal, authMode, login, register } = useAuth();
@@ -9,6 +10,9 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ponytail: hook traps Tab/Shift+Tab, auto-focuses close button, and restores focus on close
+  const modalRef = useFocusTrap<HTMLDivElement>(isAuthModalOpen, closeAuthModal);
 
   if (!isAuthModalOpen) return null;
 
@@ -30,16 +34,24 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+    <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+    >
       <div className="glass-modal w-full max-w-md rounded-3xl p-6 sm:p-8 relative shadow-2xl border border-slate-700/50">
         <button
           onClick={closeAuthModal}
-          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-white rounded-full bg-slate-900/60"
+          aria-label="Tutup dialog autentikasi"
+          className="absolute top-5 right-5 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-full bg-slate-900/60 focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <h2 className="text-xl font-extrabold text-white mb-1">
+        <h2 id="auth-modal-title" className="text-xl font-extrabold text-white mb-1">
           {mode === 'login' ? 'Masuk ke Akun' : 'Daftar Akun Baru'}
         </h2>
         <p className="text-xs text-slate-400 mb-6">
@@ -54,32 +66,38 @@ export const AuthModal: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">Email</label>
+            <label htmlFor="auth-email" className="text-xs font-semibold text-slate-300 block mb-1.5">
+              Email
+            </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="auth-email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nama@email.com"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">Kata Sandi</label>
+            <label htmlFor="auth-password" className="text-xs font-semibold text-slate-300 block mb-1.5">
+              Kata Sandi
+            </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
+                id="auth-password"
                 type="password"
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 min-h-[44px] text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500"
               />
             </div>
           </div>
@@ -87,7 +105,7 @@ export const AuthModal: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 min-h-[44px] rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             {mode === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
             <span>{loading ? 'Memproses...' : mode === 'login' ? 'Masuk' : 'Daftar'}</span>
@@ -96,14 +114,14 @@ export const AuthModal: React.FC = () => {
 
         <div className="my-5 flex items-center gap-3">
           <div className="flex-1 h-px bg-slate-800"></div>
-          <span className="text-[11px] text-slate-500 uppercase">atau</span>
+          <span className="text-[11px] text-slate-400 uppercase">atau</span>
           <div className="flex-1 h-px bg-slate-800"></div>
         </div>
 
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="w-full py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center gap-2"
+          className="w-full py-2.5 min-h-[44px] rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z"/>
@@ -120,7 +138,7 @@ export const AuthModal: React.FC = () => {
               Belum punya akun?{' '}
               <button
                 onClick={() => setMode('register')}
-                className="text-indigo-400 hover:underline font-semibold"
+                className="text-indigo-400 hover:underline font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
               >
                 Daftar sekarang
               </button>
@@ -130,7 +148,7 @@ export const AuthModal: React.FC = () => {
               Sudah punya akun?{' '}
               <button
                 onClick={() => setMode('login')}
-                className="text-indigo-400 hover:underline font-semibold"
+                className="text-indigo-400 hover:underline font-semibold focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
               >
                 Masuk ke akun
               </button>

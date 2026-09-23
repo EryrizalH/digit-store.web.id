@@ -1,4 +1,3 @@
-// ponytail: OrdersView component with per-item fulfilment status, OTP route details, and manual refund alerts
 import React, { useEffect, useState } from 'react';
 import { Order, OrderItem, FileEntitlement, OrderStockAllocation, SmsActivation } from '../types';
 import { Download, Key, Smartphone, Copy, Check, Clock, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
@@ -17,10 +16,15 @@ export const OrdersView: React.FC = () => {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderDetail, setOrderDetail] = useState<OrderDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const fetchOrders = async () => {
     try {
+      setError(null);
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data = (await res.json()) as any;
@@ -28,23 +32,33 @@ export const OrdersView: React.FC = () => {
         if (data.orders?.length > 0 && !selectedOrderId) {
           setSelectedOrderId(data.orders[0].id);
         }
+      } else {
+        setError('Gagal memuat data pesanan. Silakan coba lagi.');
       }
     } catch {
-      // ignore
+      setError('Terjadi kendala jaringan saat memuat pesanan.');
     } finally {
       setLoading(false);
     }
   };
 
   const fetchOrderDetail = async (id: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
     try {
       const res = await fetch(`/api/orders/${id}`);
       if (res.ok) {
         const data = (await res.json()) as any;
         setOrderDetail(data);
+      } else {
+        setOrderDetail(null);
+        setDetailError('Gagal memuat rincian pesanan. Silakan coba lagi.');
       }
     } catch {
-      // ignore
+      setOrderDetail(null);
+      setDetailError('Terjadi kendala jaringan saat memuat rincian pesanan.');
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -58,12 +72,20 @@ export const OrdersView: React.FC = () => {
     }
   }, [selectedOrderId]);
 
-
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCode(text);
-    setTimeout(() => setCopiedCode(null), 2000);
+  // ponytail: native safe clipboard copy with accessible error status
+  const copyToClipboard = async (text: string) => {
+    try {
+      setCopyError(null);
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(text);
+      setCopiedCode(text);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      setCopyError('Gagal menyalin ke clipboard. Silakan salin manual.');
+      setTimeout(() => setCopyError(null), 4000);
+    }
   };
 
   const formatPrice = (price: number) => {
@@ -74,6 +96,28 @@ export const OrdersView: React.FC = () => {
     return (
       <div className="max-w-7xl mx-auto py-12 px-4 text-center text-slate-400">
         Memuat data pesanan...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto py-16 px-4 text-center">
+        <div className="glass-panel max-w-md mx-auto rounded-3xl p-8 border border-rose-800/40">
+          <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+          <h3 className="text-lg font-extrabold text-white mb-2">Gagal Memuat Pesanan</h3>
+          <p className="text-xs text-slate-400 mb-6">{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchOrders();
+            }}
+            className="min-h-[44px] px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            Coba Lagi
+          </button>
+        </div>
       </div>
     );
   }
@@ -98,20 +142,24 @@ export const OrdersView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Orders Sidebar List */}
-        <div className="space-y-3">
+        <div role="tablist" aria-label="Daftar Pesanan" aria-orientation="vertical" className="space-y-3">
           {orders.map((ord) => (
-            <div
+            <button
               key={ord.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedOrderId === ord.id}
+              aria-controls={`order-detail-${ord.id}`}
               onClick={() => setSelectedOrderId(ord.id)}
-              className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+              className={`w-full text-left p-4 rounded-2xl border transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                 selectedOrderId === ord.id
-                  ? 'bg-indigo-950/40 border-indigo-500/50 glow-primary'
+                  ? 'bg-indigo-950/40 border-indigo-500/50'
                   : 'glass-card border-slate-800 hover:border-slate-700'
               }`}
             >
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <span className="text-xs font-bold text-indigo-300 font-mono">{ord.id}</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                <span role="status" className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
                   ord.payment_status === 'paid'
                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
@@ -123,14 +171,39 @@ export const OrdersView: React.FC = () => {
                 <span className="text-slate-400">{new Date(ord.created_at).toLocaleDateString('id-ID')}</span>
                 <span className="font-extrabold text-white">{formatPrice(ord.total_amount)}</span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
         {/* Selected Order Detail */}
         <div className="lg:col-span-2 space-y-6">
-          {orderDetail && (
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6">
+          {detailLoading ? (
+            <div className="glass-panel rounded-3xl p-8 text-center text-slate-400 border border-slate-800">
+              <Clock className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
+              Memuat rincian pesanan...
+            </div>
+          ) : detailError ? (
+            <div role="alert" className="glass-panel rounded-3xl p-8 text-center border border-rose-800/40">
+              <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
+              <h3 className="text-base font-extrabold text-white mb-2">Gagal Memuat Rincian Pesanan</h3>
+              <p className="text-xs text-slate-400 mb-4">{detailError}</p>
+              {selectedOrderId && (
+                <button
+                  type="button"
+                  onClick={() => fetchOrderDetail(selectedOrderId)}
+                  className="min-h-[44px] px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  Coba Lagi
+                </button>
+              )}
+            </div>
+          ) : orderDetail ? (
+            <div
+              id={`order-detail-${orderDetail.order.id}`}
+              role="tabpanel"
+              aria-label={`Detail pesanan ${orderDetail.order.id}`}
+              className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6"
+            >
               <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div>
                   <span className="text-xs text-slate-400 block">ID Transaksi</span>
@@ -209,7 +282,7 @@ export const OrdersView: React.FC = () => {
                             href={`/api/downloads/${fe.download_token}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0"
+                            className="min-h-[44px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
                           >
                             <Download className="w-4 h-4" />
                             <span>Unduh File</span>
@@ -225,6 +298,15 @@ export const OrdersView: React.FC = () => {
                       <h4 className="text-sm font-bold text-emerald-400 flex items-center gap-2">
                         <Key className="w-4 h-4" /> Kode Lisensi / Voucher Anda
                       </h4>
+                      {copyError && (
+                        <div role="alert" className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                          <span>{copyError}</span>
+                        </div>
+                      )}
+                      <div className="sr-only" aria-live="polite">
+                        {copiedCode ? 'Kode berhasil disalin ke clipboard' : copyError ? copyError : ''}
+                      </div>
                       {orderDetail.stockCodes.map((code) => (
                         <div key={code.id} className="p-4 bg-emerald-950/30 border border-emerald-800/40 rounded-2xl flex items-center justify-between gap-3">
                           <div>
@@ -234,8 +316,9 @@ export const OrdersView: React.FC = () => {
                             </span>
                           </div>
                           <button
+                            type="button"
                             onClick={() => copyToClipboard(code.code)}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0"
+                            className="min-h-[44px] px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                           >
                             {copiedCode === code.code ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                             <span>{copiedCode === code.code ? 'Tersalin' : 'Salin'}</span>
@@ -258,6 +341,10 @@ export const OrdersView: React.FC = () => {
                   )}
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="glass-panel rounded-3xl p-8 text-center text-slate-500 border border-slate-800">
+              Pilih pesanan di sebelah kiri untuk melihat detail.
             </div>
           )}
         </div>

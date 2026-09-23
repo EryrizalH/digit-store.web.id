@@ -1,4 +1,3 @@
-// ponytail: Auth page with route-driven /masuk & /daftar, next return URL handling, and Google OAuth
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

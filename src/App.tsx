@@ -1,4 +1,3 @@
-// ponytail: App root with React.lazy route code-splitting, Suspense fallback, and React Router routes
 import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -47,10 +46,10 @@ export const AppContent: React.FC = () => {
         </Routes>
       </Suspense>
 
-      <footer className="mt-auto border-t border-slate-800/80 py-6 px-4 text-center text-xs text-slate-500">
+      <footer className="mt-auto border-t border-slate-800/80 py-6 px-4 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span>© 2026 DigitStore — Digital Storefront</span>
-          <span className="flex items-center gap-2 text-[11px] text-slate-500">
+          <span>© 2026 DigitStore - Digital Storefront</span>
+          <span className="flex items-center gap-2 text-[11px] text-slate-400">
             <span>D1 Database</span> • <span>R2 Storage</span> • <span>Hono + React</span>
           </span>
         </div>

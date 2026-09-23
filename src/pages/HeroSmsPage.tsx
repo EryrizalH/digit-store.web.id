@@ -1,4 +1,3 @@
-// ponytail: Dedicated HeroSMS OTP Configurator page with canonical URL /produk/herosms-otp-configurator
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Product, OtpQuote } from '../types';
@@ -270,7 +269,7 @@ export const HeroSmsPage: React.FC = () => {
                   value={serviceSearch}
                   onChange={(e) => setServiceSearch(e.target.value)}
                   placeholder="Cari aplikasi (mis. Telegram, WA)..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 mb-2"
+                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 focus-visible:ring-2 focus-visible:ring-purple-400 mb-2"
                 />
               </div>
               <select
@@ -290,7 +289,7 @@ export const HeroSmsPage: React.FC = () => {
                     fetchOtpCountries(newService);
                   }
                 }}
-                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500"
+                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500 focus-visible:ring-2 focus-visible:ring-purple-400"
               >
                 <option value="">-- Pilih Layanan / Aplikasi --</option>
                 {filteredServices.map((s) => (
@@ -319,7 +318,7 @@ export const HeroSmsPage: React.FC = () => {
                   }
                 }}
                 disabled={!selectedService || countriesLoading || countries.length === 0}
-                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500 disabled:opacity-50"
+                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500 focus-visible:ring-2 focus-visible:ring-purple-400 disabled:opacity-50"
               >
                 {!selectedService ? (
                   <option value="">-- Pilih Layanan Terlebih Dahulu --</option>
@@ -429,7 +428,7 @@ export const HeroSmsPage: React.FC = () => {
       </div>
 
       {/* Sticky Mobile CTA Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 p-4 bg-[#090d16]/95 border-t border-slate-800/90 backdrop-blur-xl sm:relative sm:bg-transparent sm:border-none sm:p-0">
+      <div className="fixed bottom-0 left-0 right-0 z-30 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#090d16]/95 border-t border-slate-800/90 backdrop-blur-xl sm:relative sm:bg-transparent sm:border-none sm:p-0">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <div>
             <span className="text-[10px] text-slate-400 block uppercase font-bold">Harga Produk</span>

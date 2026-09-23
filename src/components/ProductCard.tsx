@@ -1,4 +1,3 @@
-// ponytail: Compact artwork-led Product Card component with accessible touch targets & dynamic OTP configurator navigation
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../types';
