@@ -207,9 +207,10 @@ export class QrisGateway implements PaymentGateway {
   private webhookSecret: string;
 
   constructor(apiBaseUrl: string, apiKey: string, webhookSecret: string = '') {
-    this.apiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
-    this.apiKey = apiKey;
-    this.webhookSecret = webhookSecret;
+    // ponytail: sanitize quotes/whitespace commonly copied into cloud secrets
+    this.apiBaseUrl = (apiBaseUrl || '').trim().replace(/\/+$/, '');
+    this.apiKey = (apiKey || '').trim().replace(/^["']|["']$/g, '');
+    this.webhookSecret = (webhookSecret || '').trim().replace(/^["']|["']$/g, '');
   }
 
   async createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult> {
@@ -238,7 +239,16 @@ export class QrisGateway implements PaymentGateway {
     });
 
     if (!res.ok) {
-      throw new Error(`QRIS API error (${res.status})`);
+      let errMsg = `QRIS API error (${res.status})`;
+      try {
+        const errBody = await res.json() as any;
+        if (errBody?.message) {
+          errMsg += `: ${errBody.message}`;
+        }
+      } catch {
+        // ignore parse error if response is not JSON
+      }
+      throw new Error(errMsg);
     }
 
     let body: unknown;

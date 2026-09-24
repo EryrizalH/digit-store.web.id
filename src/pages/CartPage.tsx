@@ -83,7 +83,13 @@ export const CartPage: React.FC = () => {
         body: JSON.stringify(payload)
       });
 
-      const data = (await res.json()) as any;
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        throw new Error(resText || `Checkout gagal (HTTP ${res.status})`);
+      }
 
       if (res.status === 409 || data.code === 'OTP_PRICE_CHANGED') {
         const fresh = data.freshQuote;

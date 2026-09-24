@@ -208,4 +208,99 @@ describe('In-Store QRIS Endpoints', () => {
     expect(data.status).toBe('paid');
     expect(data.balance).toBe(25000);
   });
+
+  it('POST /api/orders/:id/regenerate-qris returns 502 JSON when gateway fails', async () => {
+    const user = { id: 'u1', email: 'test@example.com', role: 'user' };
+    const prepare = vi.fn((query: string) => {
+      const stmt: any = {
+        bind: vi.fn(() => stmt),
+        first: vi.fn(async () => {
+          if (query.includes('FROM sessions')) return { user_id: 'u1', expires_at: Date.now() + 100000 };
+          if (query.includes('FROM users')) return user;
+          if (query.includes('SELECT * FROM orders WHERE id = ?')) {
+            return { id: 'ORD-FAIL', user_id: 'u1', total_amount: 10000, payment_provider: 'qris', payment_status: 'pending' };
+          }
+          return null;
+        }),
+        all: vi.fn(async () => ({ results: [] })),
+        run: vi.fn(async () => ({ success: true, meta: { changes: 1 } }))
+      };
+      return stmt;
+    });
+
+    const env = createMockEnv({ prepare });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      message: 'Autentikasi Gagal: API Key tidak valid'
+    }), { status: 401, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const res = await app.request('/api/orders/ORD-FAIL/regenerate-qris', {
+        method: 'POST',
+        headers: { Cookie: 'session=sess_123', 'Content-Type': 'application/json' }
+      }, env);
+
+      expect(res.status).toBe(502);
+      expect(res.headers.get('Content-Type')).toContain('application/json');
+      const data = await res.json() as any;
+      expect(data.code).toBe('PAYMENT_GATEWAY_ERROR');
+      expect(data.error).toContain('Autentikasi Gagal');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('POST /api/orders/checkout returns 502 JSON and rolls back if gateway throws', async () => {
+    const user = { id: 'u1', email: 'test@example.com', role: 'user' };
+    const product = { id: 'p1', name: 'Software', type: 'code', price: 15000, is_active: 1 };
+    const executedQueries: string[] = [];
+
+    const prepare = vi.fn((query: string) => {
+      executedQueries.push(query);
+      const stmt: any = {
+        bind: vi.fn(() => stmt),
+        first: vi.fn(async () => {
+          if (query.includes('FROM sessions')) return { user_id: 'u1', expires_at: Date.now() + 100000 };
+          if (query.includes('FROM users')) return user;
+          if (query.includes('SELECT * FROM products WHERE id = ?')) return product;
+          if (query.includes('SELECT COUNT(*) as count FROM stock_codes')) return { count: 5 };
+          return null;
+        }),
+        all: vi.fn(async () => ({ results: [] })),
+        run: vi.fn(async () => ({ success: true, meta: { changes: 1 } }))
+      };
+      return stmt;
+    });
+
+    const env = createMockEnv({ prepare });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      message: 'Autentikasi Gagal: API Key tidak valid'
+    }), { status: 401, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const res = await app.request('/api/orders/checkout', {
+        method: 'POST',
+        headers: { Cookie: 'session=sess_123', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [{ product_id: 'p1', quantity: 1 }],
+          payment_provider: 'qris'
+        })
+      }, env);
+
+      expect(res.status).toBe(502);
+      expect(res.headers.get('Content-Type')).toContain('application/json');
+      const data = await res.json() as any;
+      expect(data.code).toBe('PAYMENT_GATEWAY_ERROR');
+      expect(data.error).toContain('Autentikasi Gagal');
+
+      // Verify order rollback happened
+      expect(executedQueries.some(q => q.includes('DELETE FROM orders WHERE id = ?'))).toBe(true);
+      expect(executedQueries.some(q => q.includes('DELETE FROM order_items WHERE order_id = ?'))).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

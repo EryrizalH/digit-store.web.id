@@ -145,7 +145,13 @@ export const OrdersPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      const data = (await res.json()) as any;
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        throw new Error(resText || `Gagal generate ulang QRIS (HTTP ${res.status})`);
+      }
       if (!res.ok) throw new Error(data.error || 'Gagal generate ulang QRIS');
       setQrisTimestamp(Date.now());
       setTimeLeft(300);

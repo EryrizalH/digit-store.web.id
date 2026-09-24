@@ -152,4 +152,44 @@ describe('QrisGateway', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('strips quotes and whitespace from apiBaseUrl, apiKey, and webhookSecret', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: {
+        qris_id: 'q1',
+        trx_id: 't1',
+        qris_url: 'https://pay.example/qr/q1'
+      }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const gateway = new QrisGateway('  https://pay.example/  ', '  "secret-token" \n', '  \'wh-secret\'  ');
+      await gateway.createTransaction(options);
+
+      expect(fetchMock).toHaveBeenCalledWith('https://pay.example/create-qris', expect.objectContaining({
+        headers: expect.objectContaining({
+          'x-api-key': 'secret-token'
+        })
+      }));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('includes error message from gateway when status is not ok', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      message: 'Autentikasi Gagal: API Key tidak valid'
+    }), { status: 401, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const gateway = new QrisGateway('https://pay.example', 'wrong-key');
+      await expect(gateway.createTransaction(options)).rejects.toThrow('QRIS API error (401): Autentikasi Gagal: API Key tidak valid');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

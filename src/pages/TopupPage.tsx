@@ -139,7 +139,13 @@ export const TopupPage: React.FC = () => {
         body: JSON.stringify({ amount: topupAmount })
       });
 
-      const data = (await res.json()) as any;
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        throw new Error(resText || `Topup gagal (HTTP ${res.status})`);
+      }
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Topup gagal');

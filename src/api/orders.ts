@@ -375,17 +375,32 @@ ordersRouter.post('/checkout', async (c) => {
   }
 
   const gateway = getPaymentGateway(provider, c.env);
-  const paymentResult = await gateway.createTransaction({
-    orderId,
-    amount: totalAmount,
-    customerEmail: user.email,
-    items: validatedItems.map(vi => ({
-      id: vi.product.id,
-      name: vi.service_name ? `${vi.product.name} (${vi.service_name})` : vi.product.name,
-      price: vi.price,
-      quantity: vi.quantity
-    }))
-  });
+  let paymentResult;
+  try {
+    paymentResult = await gateway.createTransaction({
+      orderId,
+      amount: totalAmount,
+      customerEmail: user.email,
+      items: validatedItems.map(vi => ({
+        id: vi.product.id,
+        name: vi.service_name ? `${vi.product.name} (${vi.service_name})` : vi.product.name,
+        price: vi.price,
+        quantity: vi.quantity
+      }))
+    });
+  } catch (err: any) {
+    console.error('Failed to create payment transaction:', err);
+    // Rollback order and items
+    await c.env.DB.prepare('DELETE FROM order_items WHERE order_id = ?').bind(orderId).run();
+    await c.env.DB.prepare('DELETE FROM orders WHERE id = ?').bind(orderId).run();
+    if (appliedCoupon) {
+      await c.env.DB.prepare('UPDATE coupons SET used_count = CASE WHEN used_count > 0 THEN used_count - 1 ELSE 0 END WHERE id = ?').bind(appliedCoupon.id).run();
+    }
+    return c.json({
+      error: `Gagal memproses pembayaran: ${err.message || 'Gateway error'}`,
+      code: 'PAYMENT_GATEWAY_ERROR'
+    }, 502);
+  }
 
   // Update order with payment reference ID
   if (paymentResult.paymentId) {
@@ -803,12 +818,21 @@ ordersRouter.post('/:id/regenerate-qris', async (c) => {
   if (order.payment_status === 'paid') return c.json({ error: 'Order is already paid' }, 400);
 
   const gateway = getPaymentGateway('qris', c.env);
-  const paymentResult = await gateway.createTransaction({
-    orderId,
-    amount: order.total_amount,
-    customerEmail: user.email,
-    items: []
-  });
+  let paymentResult;
+  try {
+    paymentResult = await gateway.createTransaction({
+      orderId,
+      amount: order.total_amount,
+      customerEmail: user.email,
+      items: []
+    });
+  } catch (err: any) {
+    console.error('Failed to regenerate QRIS:', err);
+    return c.json({
+      error: `Gagal generate ulang QRIS: ${err.message || 'Gateway error'}`,
+      code: 'PAYMENT_GATEWAY_ERROR'
+    }, 502);
+  }
 
   if (paymentResult.paymentId) {
     await c.env.DB.prepare('UPDATE orders SET payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')

@@ -43,14 +43,23 @@ creditsRouter.post('/topup', async (c) => {
   const appUrl = c.env.APP_URL || '';
 
   const gateway = getPaymentGateway('qris', c.env);
-  const result = await gateway.createTransaction({
-    orderId: topupId,
-    amount: topupAmount,
-    customerEmail: user.email,
-    items: [{ id: 'credit-topup', name: 'Credit Topup', price: topupAmount, quantity: 1 }],
-    successReturnUrl: `${appUrl}/topup/success`,
-    cancelReturnUrl: `${appUrl}/topup/cancel`
-  });
+  let result;
+  try {
+    result = await gateway.createTransaction({
+      orderId: topupId,
+      amount: topupAmount,
+      customerEmail: user.email,
+      items: [{ id: 'credit-topup', name: 'Credit Topup', price: topupAmount, quantity: 1 }],
+      successReturnUrl: `${appUrl}/topup/success`,
+      cancelReturnUrl: `${appUrl}/topup/cancel`
+    });
+  } catch (err: any) {
+    console.error('Failed to initiate credit topup:', err);
+    return c.json({
+      error: `Gagal membuat pembayaran topup: ${err.message || 'Gateway error'}`,
+      code: 'PAYMENT_GATEWAY_ERROR'
+    }, 502);
+  }
 
   // Store the pending QRIS topup before returning the payment URL.
   await c.env.DB.prepare(`

@@ -32,7 +32,29 @@ api.get('/health', (c) => c.json({
 // Fallback JSON 404 for unmatched API routes
 api.all('*', (c) => c.json({ error: 'API route not found' }, 404));
 
+// ponytail: centralized JSON error handler ensures API never returns plain text or HTML 500s
+api.onError((err, c) => {
+  console.error('API Error:', err);
+  const status = (err as any).status || 500;
+  return c.json(
+    { error: err.message || 'Internal Server Error' },
+    status >= 400 && status < 600 ? status : 500
+  );
+});
+
 app.route('/api', api);
+
+app.onError((err, c) => {
+  console.error('App Error:', err);
+  if (c.req.path.startsWith('/api')) {
+    const status = (err as any).status || 500;
+    return c.json(
+      { error: err.message || 'Internal Server Error' },
+      status >= 400 && status < 600 ? status : 500
+    );
+  }
+  return c.text('Internal Server Error', 500);
+});
 
 function xmlEscape(value: string): string {
   return value.replace(/[<>&'\"]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[char] || char));
