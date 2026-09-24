@@ -39,6 +39,11 @@ export const CartPage: React.FC = () => {
   };
 
   const handleCheckout = async () => {
+    if (paymentProvider === 'credit' && !user) {
+      setError('Masuk terlebih dahulu untuk membayar menggunakan saldo.');
+      openAuthModal('login');
+      return;
+    }
     if (hasHeroSms && !agreedPolicy) {
       setError('Anda wajib menyetujui Kebijakan Penggunaan Layanan SMS OTP sebelum melakukan checkout.');
       return;
@@ -272,14 +277,22 @@ export const CartPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPaymentProvider('credit')}
+                  onClick={() => {
+                    if (!user) {
+                      setError('Masuk terlebih dahulu untuk membayar menggunakan saldo.');
+                      openAuthModal('login');
+                      return;
+                    }
+                    setPaymentProvider('credit');
+                  }}
                   className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                     paymentProvider === 'credit'
                       ? 'border-amber-500 bg-amber-500/10 text-amber-300'
                       : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
                   }`}
+                  aria-label={user ? 'Bayar menggunakan saldo kredit' : 'Masuk untuk membayar menggunakan saldo kredit'}
                 >
-                  <Wallet className="w-4 h-4" /> Kredit
+                  <Wallet className="w-4 h-4" /> {user ? 'Kredit' : 'Kredit (masuk dulu)'}
                 </button>
               </div>
               {/* Credit balance info when credit is selected */}

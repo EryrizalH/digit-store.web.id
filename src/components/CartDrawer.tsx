@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Trash2, Plus, Minus, QrCode, ArrowRight, AlertCircle, Mail } from 'lucide-react';
+import { X, Trash2, Plus, Minus, QrCode, ArrowRight, AlertCircle, Mail, Wallet } from 'lucide-react';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -12,7 +12,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   const { cart, isCartOpen, closeCart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
   const { user, openAuthModal, guestCheckout } = useAuth();
 
-  const [paymentProvider] = useState<'qris'>('qris');
+  const [paymentProvider, setPaymentProvider] = useState<'qris' | 'credit'>('qris');
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +33,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
     };
   }, [isCartOpen]);
 
+  useEffect(() => {
+    if (!user) {
+      setCreditBalance(null);
+      setPaymentProvider('qris');
+      return;
+    }
+    fetch('/api/credits/balance')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data: any) => {
+        if (data && typeof data.balance === 'number') setCreditBalance(data.balance);
+      })
+      .catch(() => {});
+  }, [user]);
+
   if (!isCartOpen) return null;
 
   const hasHeroSms = cart.some(item => item.product.type === 'herosms');
@@ -41,6 +56,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   };
 
   const handleCheckout = async () => {
+    if (paymentProvider === 'credit' && !user) {
+      setError('Masuk terlebih dahulu untuk membayar menggunakan saldo.');
+      openAuthModal('login');
+      return;
+    }
     if (hasHeroSms && !agreedPolicy) {
       setError('Wajib menyetujui Kebijakan Penggunaan Layanan SMS OTP sebelum checkout.');
       return;
@@ -238,17 +258,40 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                   <span className="text-xs font-semibold text-slate-300 block mb-2">
                     Metode Pembayaran:
                   </span>
-                  <div className="rounded-xl border border-indigo-500 bg-indigo-500/10 p-4">
-                    <div className="flex items-start gap-3">
-                      <QrCode className="w-5 h-5 text-indigo-300 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-indigo-200">QRIS</p>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-300">
-                          Bayar langsung dengan scan QRIS di halaman pesanan toko.
-                        </p>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentProvider('qris')}
+                      className={`min-h-[52px] rounded-xl border p-3 text-left text-xs font-bold ${paymentProvider === 'qris' ? 'border-indigo-500 bg-indigo-500/10 text-indigo-200' : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'}`}
+                    >
+                      <span className="flex items-center gap-2"><QrCode className="w-4 h-4" /> QRIS</span>
+                      <span className="mt-1 block text-[10px] font-normal text-slate-400">Scan di halaman pesanan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!user) {
+                          setError('Masuk terlebih dahulu untuk membayar menggunakan saldo.');
+                          openAuthModal('login');
+                          return;
+                        }
+                        setPaymentProvider('credit');
+                      }}
+                      className={`min-h-[52px] rounded-xl border p-3 text-left text-xs font-bold ${paymentProvider === 'credit' ? 'border-amber-500 bg-amber-500/10 text-amber-200' : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'}`}
+                    >
+                      <span className="flex items-center gap-2"><Wallet className="w-4 h-4" /> Saldo</span>
+                      <span className="mt-1 block text-[10px] font-normal text-slate-400">Potong saldo akun</span>
+                    </button>
                   </div>
+                  {paymentProvider === 'credit' && user && (
+                    <div className={`mt-2 rounded-xl border p-3 text-xs ${creditBalance !== null && creditBalance >= totalPrice ? 'border-emerald-800/50 bg-emerald-950/40 text-emerald-300' : 'border-rose-800/50 bg-rose-950/40 text-rose-300'}`}>
+                      <div className="flex items-center justify-between">
+                        <span>Saldo saat ini</span>
+                        <span className="font-black">{creditBalance === null ? 'Memuat...' : formatPrice(creditBalance)}</span>
+                      </div>
+                      {creditBalance !== null && creditBalance < totalPrice && <p className="mt-1 text-[10px]">Saldo belum mencukupi untuk total keranjang.</p>}
+                    </div>
+                  )}
                 </div>
 
                 {hasHeroSms && (

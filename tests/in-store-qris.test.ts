@@ -119,6 +119,62 @@ describe('In-Store QRIS Endpoints', () => {
     }
   });
 
+  it('GET /api/orders/:id reconciles a stale QRIS order when gateway reports EXPIRED', async () => {
+    const user = { id: 'u1', email: 'test@example.com', role: 'user' };
+    const oldTimestamp = new Date(Date.now() - (6 * 60 * 1000)).toISOString();
+    let paymentStatus = 'pending';
+    const prepare = vi.fn((query: string) => {
+      const stmt: any = {
+        bind: vi.fn(() => stmt),
+        first: vi.fn(async () => {
+          if (query.includes('FROM sessions')) return user;
+          if (query.includes('SELECT * FROM orders WHERE id = ?')) {
+            return {
+              id: 'ORD-EXPIRED',
+              user_id: 'u1',
+              total_amount: 25000,
+              payment_provider: 'qris',
+              payment_status: paymentStatus,
+              payment_id: 'qris_expired_1',
+              created_at: oldTimestamp,
+              updated_at: oldTimestamp
+            };
+          }
+          return null;
+        }),
+        all: vi.fn(async () => ({ results: [] })),
+        run: vi.fn(async () => {
+          if (query.includes("UPDATE orders SET payment_status = ?")) paymentStatus = 'failed';
+          return { success: true, meta: { changes: query.includes("UPDATE orders SET payment_status = ?") ? 1 : 0 } };
+        })
+      };
+      return stmt;
+    });
+    const env = createMockEnv({ prepare });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      qris_id: 'qris_expired_1',
+      amount: 25000,
+      status: 'EXPIRED'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const res = await app.request('/api/orders/ORD-EXPIRED', {
+        method: 'GET',
+        headers: { Cookie: 'session=sess_123' }
+      }, env);
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.order.payment_status).toBe('failed');
+      expect(data.order.delivery_status).toBe('failed');
+      expect(fetchMock).toHaveBeenCalledWith('https://pay.example.com/api/qr-status/qris_expired_1');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('POST /api/orders/:id/regenerate-qris generates a new QRIS for pending order', async () => {
     const user = { id: 'u1', email: 'test@example.com', role: 'user' };
     let updatedPaymentId = '';

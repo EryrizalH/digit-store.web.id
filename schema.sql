@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id),
   total_amount REAL NOT NULL,
-  payment_provider TEXT NOT NULL, -- 'midtrans' | 'xendit'
+  payment_provider TEXT NOT NULL, -- 'qris' | 'midtrans' | 'xendit' | 'sumopod' | 'credit'
   payment_status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'paid' | 'failed' | 'refunded'
   payment_id TEXT,
   coupon_code TEXT,
@@ -256,3 +256,4 @@ CREATE INDEX IF NOT EXISTS idx_product_reviews_product ON product_reviews(produc
 CREATE UNIQUE INDEX IF NOT EXISTS idx_product_reviews_order_product ON product_reviews(order_id, product_id, user_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_txn_topup_ref ON credit_transactions(reference_id) WHERE type = 'topup';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_txn_debit_ref ON credit_transactions(reference_id) WHERE type = 'debit' AND reference_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_credit_txn_refund_ref ON credit_transactions(reference_id) WHERE type = 'refund' AND reference_id IS NOT NULL;

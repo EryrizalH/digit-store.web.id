@@ -90,6 +90,8 @@ describe('QrisGateway', () => {
       .resolves.toMatchObject({ orderId: 'ORD-Q-123', paymentId: 'TRX-Q-123', grossAmount: 25001, status: 'paid' });
     await expect(gateway.verifyWebhook({ ...basePayload, status: 'EXPIRED', trx_id: undefined }, { 'x-webhook-secret': 'webhook-secret' }))
       .resolves.toMatchObject({ paymentId: 'qris_123', status: 'failed' });
+    await expect(gateway.verifyWebhook({ reference_id: 'ORD-Q-123', status: 'EXPIRED' }, { 'x-webhook-secret': 'webhook-secret' }))
+      .resolves.toMatchObject({ paymentId: 'ORD-Q-123', status: 'failed' });
     await expect(gateway.verifyWebhook({ ...basePayload, status: 'PENDING' }, { 'x-webhook-secret': 'webhook-secret' }))
       .resolves.toMatchObject({ status: 'pending' });
   });
@@ -148,6 +150,30 @@ describe('QrisGateway', () => {
       const imgRes = await gateway.fetchQrImage('qris_abc');
       expect(fetchMock).toHaveBeenCalledWith('https://pay.example/qr/qris_abc?format=raw');
       expect(imgRes.headers.get('Content-Type')).toBe('image/png');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('fetches the canonical gateway status and normalizes expiry state', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      qris_id: 'qris_expired',
+      trx_id: 'TRX-EXPIRED',
+      amount: 25000,
+      status: 'EXPIRED',
+      expires_at: '2026-09-24T12:00:00.000Z'
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const gateway = new QrisGateway('https://pay.example', 'api-key');
+      await expect(gateway.fetchStatus('qris_expired')).resolves.toEqual({
+        status: 'EXPIRED',
+        expiresAt: '2026-09-24T12:00:00.000Z',
+        amount: 25000
+      });
+      expect(fetchMock).toHaveBeenCalledWith('https://pay.example/api/qr-status/qris_expired');
     } finally {
       vi.unstubAllGlobals();
     }

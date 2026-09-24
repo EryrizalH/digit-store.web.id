@@ -3,8 +3,8 @@ import { getCookie } from 'hono/cookie';
 import { Env, User } from '../types';
 import { getSessionUser } from '../services/auth';
 import { getPaymentGateway, QrisGateway } from '../services/payments';
-import { fulfillOrder } from '../services/fulfilment';
-import { debitCredit, refundCredit } from '../services/credits';
+import { fulfillOrder, refundFailedOrderItem } from '../services/fulfilment';
+import { debitCredit } from '../services/credits';
 import { checkRateLimit } from '../services/rate-limit';
 import { HeroSmsClient } from '../services/herosms';
 import { getOtpSettings, calculateSellingPrice, validateOtpSettings, createHeroSmsClient } from './otp';
@@ -34,7 +34,75 @@ function getDeliveryStatus(paymentStatus: string, items: any[]): string {
   if (statuses.every((status) => status === 'fulfilled')) return 'fulfilled';
   if (statuses.every((status) => status === 'refunded')) return 'refunded';
   if (statuses.some((status) => status === 'failed')) return 'failed';
+  if (statuses.some((status) => status === 'refunded')) return 'partially_refunded';
   return 'processing';
+}
+
+const QRIS_EXPIRY_MS = 5 * 60 * 1000;
+
+/**
+ * Reconcile QRIS expiry from the gateway when its expiry callback was not
+ * delivered. The gateway's status endpoint performs its own lazy expiry
+ * update, so an explicit EXPIRED response is required before changing the
+ * storefront order. The conditional update makes concurrent reconciliation
+ * idempotent; when another process won the race we reload the current order
+ * state before returning it.
+ */
+async function reconcileQrisExpiry(db: D1Database, env: Env, order: any): Promise<any> {
+  if (order?.payment_provider !== 'qris' || order?.payment_status !== 'pending' || !order?.payment_id) {
+    return order;
+  }
+
+  const expiryAnchor = Date.parse(String(order.updated_at || order.created_at || ''));
+  if (!Number.isFinite(expiryAnchor) || Date.now() - expiryAnchor < QRIS_EXPIRY_MS) {
+    return order;
+  }
+
+  try {
+    const gateway = getPaymentGateway('qris', env) as QrisGateway;
+    const gatewayStatus = await gateway.fetchStatus(String(order.payment_id));
+    const isPaid = gatewayStatus.status === 'PAID';
+    const isFailed = gatewayStatus.status === 'EXPIRED' || gatewayStatus.status === 'FAILED';
+    if (!isPaid && !isFailed) {
+      return order;
+    }
+
+    const expectedAmount = Math.round(Number(order.total_amount));
+    if (isPaid) {
+      const paidAmount = Math.round(Number(gatewayStatus.amount));
+      if (!Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
+        console.error(`QRIS status amount mismatch for order ${order.id}`);
+        return order;
+      }
+    }
+
+    const transition = await db.prepare(
+      'UPDATE orders SET payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_status = \'pending\''
+    ).bind(isPaid ? 'paid' : 'failed', order.id).run();
+    const changes = Number(transition?.meta?.changes ?? (transition as any)?.changes ?? 0);
+    if (changes > 0) {
+      if (isPaid) {
+        await fulfillOrder(order.id, order.user_id, env);
+        await createInAppNotification(db, order.user_id, 'Pembayaran berhasil', `Order ${order.id} sedang diproses.`, order.id);
+        await sendNotificationWebhook(env, {
+          event: 'payment.paid',
+          orderId: order.id,
+          userId: order.user_id,
+          amount: expectedAmount,
+          status: 'paid'
+        });
+      }
+      return { ...order, payment_status: isPaid ? 'paid' : 'failed', updated_at: new Date().toISOString() };
+    }
+
+    const latest = await db.prepare('SELECT * FROM orders WHERE id = ?').bind(order.id).first<any>();
+    return latest || order;
+  } catch (error) {
+    // Keep the order pending when the gateway cannot be reached. A transient
+    // status lookup failure must not be treated as a payment failure.
+    console.error('Failed to reconcile QRIS expiry:', error);
+    return order;
+  }
 }
 
 // Checkout (Create Order)
@@ -283,7 +351,12 @@ ordersRouter.post('/checkout', async (c) => {
     }
   }
   discountAmount = Math.min(subtotalAmount, Math.round(discountAmount));
-  totalAmount = Math.max(0, subtotalAmount - discountAmount);
+  // Wallet and provider amounts are whole IDR units. Normalize once after
+  // discounts so the ledger and gateway always charge the same integer.
+  totalAmount = Math.max(0, Math.round(subtotalAmount - discountAmount));
+  if (totalAmount <= 0) {
+    return c.json({ error: 'Total pembayaran harus lebih besar dari nol.' }, 400);
+  }
 
   const allowedProviders = ['qris', 'midtrans', 'xendit', 'sumopod', 'credit'];
   const provider = payment_provider || c.env.PAYMENT_PROVIDER || 'qris';
@@ -439,7 +512,12 @@ ordersRouter.get('/', async (c) => {
     SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC
   `).bind(user.id).all();
 
-  return c.json({ orders: orders.results || [] });
+  const reconciledOrders = [];
+  for (const order of orders.results || []) {
+    reconciledOrders.push(await reconcileQrisExpiry(c.env.DB, c.env, order));
+  }
+
+  return c.json({ orders: reconciledOrders });
 });
 
 // Admin order queue. It is intentionally separate from the customer list so
@@ -646,12 +724,12 @@ ordersRouter.post('/admin/:id/retry-fulfillment', async (c) => {
   return c.json({ success: true, resetItems: Number(reset.meta?.changes || 0), fulfillment });
 });
 
-ordersRouter.post('/admin/:id/refund-failed', async (c) => {
+async function refundFailedOrderByAdmin(c: any) {
   const admin = await requireAdmin(c);
   if (!admin) return c.json({ error: 'Unauthorized. Admin access required.' }, 403);
 
   const orderId = c.req.param('id');
-  const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
+  const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first() as any;
   if (!order) return c.json({ error: 'Order not found' }, 404);
   if (order.payment_status !== 'paid') return c.json({ error: 'Only paid orders can be refunded' }, 400);
   if (order.payment_provider !== 'credit') {
@@ -659,27 +737,35 @@ ordersRouter.post('/admin/:id/refund-failed', async (c) => {
   }
 
   const failedItems = await c.env.DB.prepare("SELECT * FROM order_items WHERE order_id = ? AND fulfilment_status = 'failed'")
-    .bind(orderId).all<any>();
+    .bind(orderId).all() as any;
   if (!failedItems.results?.length) return c.json({ error: 'No failed items need a refund' }, 400);
 
   let refundedAmount = 0;
   let refundedItems = 0;
-  for (const item of failedItems.results) {
-    const amount = Number(item.price) * Number(item.quantity);
-    const refundReference = `refund-${item.id}`;
-    const existingRefund = await c.env.DB.prepare("SELECT id FROM credit_transactions WHERE reference_id = ? AND type = 'refund' LIMIT 1")
-      .bind(refundReference).first<any>();
-    if (!existingRefund) {
-      await refundCredit(c.env.DB, order.user_id, amount, refundReference, `Admin refund for failed item ${item.id}`);
-    }
-    await c.env.DB.prepare("UPDATE order_items SET fulfilment_status = 'refunded' WHERE id = ? AND fulfilment_status = 'failed'")
-      .bind(item.id).run();
-    refundedAmount += amount;
+  for (const item of failedItems.results || []) {
+    const result = await refundFailedOrderItem(orderId, item.id, order.user_id, c.env, 'admin');
+    if (!result.refunded) continue;
+    refundedAmount += result.amount;
     refundedItems += 1;
+    await c.env.DB.prepare(`
+      INSERT INTO audit_logs (id, user_id, action, details)
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      `log_${crypto.randomUUID()}`,
+      admin.id,
+      'ADMIN_REFUND_ORDER',
+      `Admin ${admin.id} refunded IDR ${result.amount} for item ${item.id} in order ${orderId}`
+    ).run();
   }
 
-  return c.json({ success: true, refundedItems, refundedAmount });
-});
+  const updatedOrder = await c.env.DB.prepare('SELECT payment_status FROM orders WHERE id = ?').bind(orderId).first() as any;
+  return c.json({ success: true, refundedItems, refundedAmount, paymentStatus: updatedOrder?.payment_status || order.payment_status });
+}
+
+// Admin refund is limited to failed items from saldo-paid orders. Gateway
+// refunds require the provider's own refund API and remain a separate action.
+ordersRouter.post('/admin/:id/refund-failed', refundFailedOrderByAdmin);
+ordersRouter.post('/admin/:id/refund', refundFailedOrderByAdmin);
 
 ordersRouter.post('/:id/report', async (c) => {
   const user = await getAuthUser(c);
@@ -715,10 +801,12 @@ ordersRouter.get('/:id', async (c) => {
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
   const orderId = c.req.param('id');
-  const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ? AND (user_id = ? OR ? = "admin")')
+  let order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ? AND (user_id = ? OR ? = "admin")')
     .bind(orderId, user.id, user.role).first<any>();
 
   if (!order) return c.json({ error: 'Order not found' }, 404);
+
+  order = await reconcileQrisExpiry(c.env.DB, c.env, order);
 
   const rawItems = await c.env.DB.prepare(`
     SELECT oi.*, p.slug as product_slug, p.description as product_description,

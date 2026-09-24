@@ -37,6 +37,7 @@ export const OrdersPage: React.FC = () => {
   const [qrisTimestamp, setQrisTimestamp] = useState(Date.now());
   const [regeneratingQris, setRegeneratingQris] = useState(false);
   const [qrisRegenerateError, setQrisRegenerateError] = useState<string | null>(null);
+  const [qrisExpiryOverride, setQrisExpiryOverride] = useState<{ orderId: string; expiresAt: number } | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -46,20 +47,20 @@ export const OrdersPage: React.FC = () => {
     }
   }, [user, authLoading, id, navigate]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (silent = false) => {
     try {
-      setError(null);
+      if (!silent) setError(null);
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data = (await res.json()) as any;
         setOrders(data.orders || []);
-      } else {
+      } else if (!silent) {
         setError('Gagal memuat data pesanan. Silakan coba lagi.');
       }
     } catch {
-      setError('Terjadi kendala jaringan saat memuat pesanan.');
+      if (!silent) setError('Terjadi kendala jaringan saat memuat pesanan.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -107,7 +108,14 @@ export const OrdersPage: React.FC = () => {
     if (!activeDelivery) return;
 
     const interval = window.setInterval(() => {
-      void fetchOrderDetail(id, true);
+      void (async () => {
+        // Refresh detail first so an expiry transition performed while
+        // reading the order is reflected in the list refresh below too.
+        await fetchOrderDetail(id, true);
+        // Keep the sidebar status in sync as payment webhooks or expiry
+        // reconciliation update the order while this detail page is open.
+        await fetchOrders(true);
+      })();
     }, 5000);
     return () => window.clearInterval(interval);
   }, [user, id, orderDetail?.order.delivery_status]);
@@ -115,11 +123,14 @@ export const OrdersPage: React.FC = () => {
   useEffect(() => {
     if (!orderDetail || orderDetail.order.payment_status !== 'pending' || orderDetail.order.payment_provider !== 'qris') {
       setTimeLeft(null);
+      setQrisExpiryOverride(null);
       return;
     }
 
-    const createdAtMs = new Date(orderDetail.order.created_at).getTime();
-    const expiryMs = createdAtMs + 5 * 60 * 1000;
+    const parsedAnchorMs = new Date(orderDetail.order.updated_at || orderDetail.order.created_at).getTime();
+    const anchorMs = Number.isFinite(parsedAnchorMs) ? parsedAnchorMs : Date.now();
+    const overrideMs = qrisExpiryOverride?.orderId === orderDetail.order.id ? qrisExpiryOverride.expiresAt : null;
+    const expiryMs = overrideMs || anchorMs + 5 * 60 * 1000;
     const remainingSeconds = Math.max(0, Math.floor((expiryMs - Date.now()) / 1000));
     setTimeLeft(remainingSeconds);
 
@@ -134,7 +145,7 @@ export const OrdersPage: React.FC = () => {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [orderDetail?.order.id, orderDetail?.order.payment_status, qrisTimestamp]);
+  }, [orderDetail?.order.id, orderDetail?.order.payment_status, orderDetail?.order.updated_at, qrisTimestamp, qrisExpiryOverride]);
 
   const handleRegenerateQris = async () => {
     if (!orderDetail) return;
@@ -153,8 +164,16 @@ export const OrdersPage: React.FC = () => {
         throw new Error(resText || `Gagal membuat ulang QRIS (HTTP ${res.status})`);
       }
       if (!res.ok) throw new Error(data.error || 'Gagal membuat QRIS baru');
+      const rawExpiresAt = data.expiresAt;
+      const parsedExpiresAt = typeof rawExpiresAt === 'number'
+        ? (rawExpiresAt > 1e12 ? rawExpiresAt : rawExpiresAt * 1000)
+        : Date.parse(String(rawExpiresAt || ''));
+      const expiresAt = Number.isFinite(parsedExpiresAt) && parsedExpiresAt > Date.now()
+        ? parsedExpiresAt
+        : Date.now() + 5 * 60 * 1000;
+      setQrisExpiryOverride({ orderId: orderDetail.order.id, expiresAt });
       setQrisTimestamp(Date.now());
-      setTimeLeft(300);
+      setTimeLeft(Math.max(0, Math.floor((expiresAt - Date.now()) / 1000)));
       void fetchOrderDetail(orderDetail.order.id, true);
     } catch (err: any) {
       setQrisRegenerateError(err.message || 'Gagal membuat QRIS baru');
@@ -239,6 +258,7 @@ export const OrdersPage: React.FC = () => {
       case 'fulfilled': return 'Produk siap digunakan';
       case 'failed': return 'Perlu bantuan layanan';
       case 'refunded': return 'Dana sudah dikembalikan';
+      case 'partially_refunded': return 'Sebagian dana dikembalikan';
       case 'processing': return 'Sedang menyiapkan produk';
       default: return 'Menunggu pembayaran';
     }
@@ -407,6 +427,8 @@ export const OrdersPage: React.FC = () => {
                 className={`rounded-2xl border p-4 ${
                   orderDetail.order.delivery_status === 'failed'
                     ? 'border-rose-800/60 bg-rose-950/30'
+                    : orderDetail.order.delivery_status === 'refunded' || orderDetail.order.delivery_status === 'partially_refunded'
+                      ? 'border-amber-800/60 bg-amber-950/30'
                     : orderDetail.order.delivery_status === 'fulfilled'
                       ? 'border-emerald-800/60 bg-emerald-950/30'
                       : 'border-indigo-800/60 bg-indigo-950/30'
@@ -586,6 +608,10 @@ export const OrdersPage: React.FC = () => {
                         ) : item.fulfilment_status === 'failed' ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1" title={formatFulfilmentError(item.fulfilment_error)}>
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Bantuan Diperlukan ({formatFulfilmentError(item.fulfilment_error)})
+                          </span>
+                        ) : item.fulfilment_status === 'refunded' ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Dana dikembalikan
                           </span>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">

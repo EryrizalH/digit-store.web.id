@@ -142,6 +142,85 @@ describe('QRIS webhook route', () => {
     expect(notificationWebhookMock).toHaveBeenCalledTimes(1);
   });
 
+  it('marks a QRIS order failed when the gateway reports an expired payment', async () => {
+    const order = {
+      id: 'ORD-Q-EXPIRED',
+      user_id: 'usr_qris',
+      total_amount: 25000,
+      payment_provider: 'qris',
+      payment_status: 'pending'
+    };
+    let updateArgs: unknown[] | undefined;
+    const prepare = vi.fn((query: string) => {
+      if (query.includes('SELECT * FROM orders WHERE id = ?')) {
+        return statement(order);
+      }
+      if (query.includes('UPDATE') && query.includes('orders')) {
+        const update = statement();
+        update.bind = vi.fn((...args: unknown[]) => {
+          updateArgs = args;
+          return update;
+        });
+        return update;
+      }
+      return statement();
+    });
+    const env = createEnv(prepare);
+
+    const response = await qrisRequest({
+      ...paidOrderPayload,
+      reference_id: order.id,
+      status: 'EXPIRED',
+      amount: undefined,
+      trx_id: undefined,
+      qris_id: undefined
+    }, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'OK' });
+    expect(updateArgs).toEqual([order.id, 'failed', order.id]);
+    expect(fulfillOrderMock).not.toHaveBeenCalled();
+    expect(inAppNotificationMock).not.toHaveBeenCalled();
+    expect(notificationWebhookMock).not.toHaveBeenCalled();
+  });
+
+  it('removes a pending QRIS topup when the payment expires', async () => {
+    const topupId = 'TOPUP-Q-EXPIRED';
+    let deleteArgs: unknown[] | undefined;
+    const prepare = vi.fn((query: string) => {
+      if (query.includes('DELETE FROM credit_transactions')) {
+        const remove = statement();
+        remove.bind = vi.fn((...args: unknown[]) => {
+          deleteArgs = args;
+          return remove;
+        });
+        return remove;
+      }
+      if (query.includes('type = "topup"')) {
+        return statement(null);
+      }
+      if (query.includes('type = "topup_pending"')) {
+        return statement({ id: 'pending_expired', user_id: 'usr_qris', amount: 50000 });
+      }
+      return statement();
+    });
+    const env = createEnv(prepare);
+
+    const response = await qrisRequest({
+      ...paidOrderPayload,
+      reference_id: topupId,
+      status: 'expired',
+      amount: 50000
+    }, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'OK' });
+    expect(deleteArgs).toEqual([topupId]);
+    expect(env.DB.prepare).toHaveBeenCalledWith(
+      'DELETE FROM credit_transactions WHERE reference_id = ? AND type = "topup_pending"'
+    );
+  });
+
   it('rejects order amount and provider mismatches without fulfilment', async () => {
     const qrisOrder = {
       id: 'ORD-Q-001',
@@ -187,9 +266,13 @@ describe('QRIS webhook route', () => {
       return statement();
     });
     const env = createEnv(prepare);
-    env.DB.batch = vi.fn(async () => {
-      credited += 1;
-      return [];
+    env.DB.batch = vi.fn(async (statements: any[]) => {
+      // completeTopup executes claim, balance, and audit in one batch. Model
+      // the conditional claim so only the first callback can credit the wallet.
+      const changes = claimAvailable ? 1 : 0;
+      claimAvailable = false;
+      credited += changes;
+      return statements.map(() => ({ success: true, meta: { changes } }));
     });
 
     const first = await qrisRequest(topupPayload, env);

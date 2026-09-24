@@ -288,6 +288,44 @@ export class QrisGateway implements PaymentGateway {
     return fetch(`${this.apiBaseUrl}/qr/${encodeURIComponent(paymentId)}?format=raw`);
   }
 
+  /**
+   * Read the gateway's canonical transaction state. The gateway marks an
+   * unpaid transaction as EXPIRED when this endpoint is queried, so the
+   * storefront can reconcile an expired QRIS even when an expiry callback was
+   * not delivered.
+   */
+  async fetchStatus(paymentId: string): Promise<{ status: string; expiresAt?: string; amount?: number }> {
+    if (!this.apiBaseUrl) {
+      throw new Error('QRIS API base URL is not configured');
+    }
+    const normalizedPaymentId = String(paymentId || '').trim();
+    if (!normalizedPaymentId) {
+      throw new Error('QRIS payment identifier is required');
+    }
+
+    const res = await fetch(`${this.apiBaseUrl}/api/qr-status/${encodeURIComponent(normalizedPaymentId)}`);
+    let body: any = null;
+    try {
+      body = await res.json();
+    } catch {
+      // Keep a provider error below instead of leaking a JSON parse failure.
+    }
+    if (!res.ok) {
+      throw new Error(`QRIS status API error (${res.status})`);
+    }
+
+    const status = typeof body?.status === 'string' ? body.status.trim().toUpperCase() : '';
+    if (!status) {
+      throw new Error('QRIS status API response is missing status');
+    }
+
+    return {
+      status,
+      expiresAt: typeof body?.expires_at === 'string' ? body.expires_at : undefined,
+      amount: body?.amount === undefined ? undefined : Number(body.amount)
+    };
+  }
+
   async verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }> {
     if (!this.webhookSecret) {
       throw new Error('QRIS webhook secret is not configured');
@@ -303,34 +341,40 @@ export class QrisGateway implements PaymentGateway {
       throw new Error('Missing QRIS reference_id');
     }
 
-    const paymentId = typeof payload?.trx_id === 'string' && payload.trx_id.trim()
+    const rawPaymentId = typeof payload?.trx_id === 'string' && payload.trx_id.trim()
       ? payload.trx_id.trim()
       : typeof payload?.qris_id === 'string' && payload.qris_id.trim()
         ? payload.qris_id.trim()
         : '';
+
+    const rawStatus = typeof payload?.status === 'string' ? payload.status.trim().toUpperCase() : '';
+    let status: PaymentStatus;
+    if (rawStatus === 'PAID') {
+      status = 'paid';
+    } else if (rawStatus === 'FAILED' || rawStatus === 'EXPIRED') {
+      status = 'failed';
+    } else if (rawStatus === 'PENDING') {
+      status = 'pending';
+    } else {
+      throw new Error('Unknown QRIS webhook status');
+    }
+
+    // Gateways may omit amount and transaction identifiers on terminal expiry
+    // callbacks. Those callbacks only need the authenticated reference to
+    // close the pending order; paid callbacks remain strict.
+    const paymentId = rawPaymentId || (status === 'failed' ? orderId : '');
     if (!paymentId) {
       throw new Error('Missing QRIS payment identifier');
     }
 
     const rawAmount = payload?.amount;
     if (rawAmount === undefined || rawAmount === null || (typeof rawAmount === 'string' && !rawAmount.trim())) {
-      throw new Error('Missing QRIS amount');
+      if (status === 'paid') throw new Error('Missing QRIS amount');
+      return { orderId, status, paymentId, grossAmount: undefined };
     }
     const grossAmount = Number(rawAmount);
     if (!Number.isFinite(grossAmount)) {
       throw new Error('Invalid QRIS amount');
-    }
-
-    const rawStatus = typeof payload?.status === 'string' ? payload.status.trim() : '';
-    let status: PaymentStatus;
-    if (rawStatus === 'paid' || rawStatus === 'PAID') {
-      status = 'paid';
-    } else if (rawStatus === 'failed' || rawStatus === 'FAILED' || rawStatus === 'EXPIRED' || rawStatus === 'expired') {
-      status = 'failed';
-    } else if (rawStatus === 'pending' || rawStatus === 'PENDING') {
-      status = 'pending';
-    } else {
-      throw new Error('Unknown QRIS webhook status');
     }
 
     return { orderId, status, paymentId, grossAmount };

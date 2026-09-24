@@ -3,6 +3,98 @@ import { HeroSmsClient, HeroSmsError } from './herosms';
 import { refundCredit } from './credits';
 import { createInAppNotification, sendNotificationWebhook } from './notifications';
 
+export interface CreditRefundResult {
+  refunded: boolean;
+  amount: number;
+  alreadyRefunded?: boolean;
+  reason?: 'NOT_CREDIT_PAYMENT' | 'NOT_FOUND' | 'ZERO_AMOUNT';
+}
+
+/**
+ * Refund one failed order item using the amount actually charged. Item prices
+ * are stored before order-level discounts, so the refund is allocated
+ * proportionally from the final order total.
+ */
+export async function refundFailedOrderItem(
+  orderId: string,
+  itemId: string,
+  userId: string,
+  env: Env,
+  source: 'auto' | 'admin' | 'otp' = 'auto'
+): Promise<CreditRefundResult> {
+  const item = await env.DB.prepare(
+    'SELECT * FROM order_items WHERE id = ? AND order_id = ? LIMIT 1'
+  ).bind(itemId, orderId).first<any>();
+  if (!item) return { refunded: false, amount: 0, reason: 'NOT_FOUND' };
+
+  const refundReference = `refund-${item.id}`;
+  const existingRefund = await env.DB.prepare(
+    "SELECT * FROM credit_transactions WHERE reference_id = ? AND type = 'refund' LIMIT 1"
+  ).bind(refundReference).first<any>();
+
+  const markRefunded = async () => {
+    await env.DB.prepare(
+      "UPDATE order_items SET fulfilment_status = 'refunded' WHERE id = ? AND fulfilment_status IN ('failed', 'refunded')"
+    ).bind(item.id).run();
+    const summary = await env.DB.prepare(`
+      SELECT COUNT(*) as total,
+        SUM(CASE WHEN fulfilment_status = 'refunded' THEN 1 ELSE 0 END) as refunded
+      FROM order_items WHERE order_id = ?
+    `).bind(orderId).first<any>();
+    if (Number(summary?.total || 0) > 0 && Number(summary?.refunded || 0) === Number(summary.total)) {
+      await env.DB.prepare(
+        "UPDATE orders SET payment_status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_status = 'paid'"
+      ).bind(orderId).run();
+    }
+  };
+
+  if (existingRefund) {
+    await markRefunded();
+    return { refunded: true, amount: Math.round(Number(existingRefund.amount) || 0), alreadyRefunded: true };
+  }
+
+  const debit = await env.DB.prepare(
+    "SELECT id FROM credit_transactions WHERE reference_id = ? AND type = 'debit' LIMIT 1"
+  ).bind(orderId).first<any>();
+  if (!debit) return { refunded: false, amount: 0, reason: 'NOT_CREDIT_PAYMENT' };
+
+  const order = await env.DB.prepare('SELECT total_amount FROM orders WHERE id = ?').bind(orderId).first<any>();
+  const allItems = await env.DB.prepare(
+    'SELECT price, quantity FROM order_items WHERE order_id = ?'
+  ).bind(orderId).all<any>();
+  const grossTotal = (allItems.results || []).reduce(
+    (sum: number, row: any) => sum + Math.max(0, Number(row.price) || 0) * Math.max(0, Number(row.quantity) || 0),
+    0
+  );
+  const itemGross = Math.max(0, Number(item.price) || 0) * Math.max(0, Number(item.quantity) || 0);
+  const chargedTotal = Math.min(Math.round(grossTotal), Math.max(0, Math.round(Number(order?.total_amount) || 0)));
+  const refundAmount = grossTotal > 0
+    ? Math.min(Math.round(itemGross), Math.max(0, Math.floor(itemGross * chargedTotal / grossTotal)))
+    : 0;
+  if (refundAmount <= 0) return { refunded: false, amount: 0, reason: 'ZERO_AMOUNT' };
+
+  await refundCredit(
+    env.DB,
+    userId,
+    refundAmount,
+    refundReference,
+    `${source === 'admin' ? 'Admin' : source === 'otp' ? 'OTP failure' : 'Auto'} refund for failed item: ${item.product_name} (Order: ${orderId})`
+  );
+  await markRefunded();
+
+  await env.DB.prepare(`
+    INSERT INTO audit_logs (id, user_id, action, details)
+    VALUES (?, ?, ?, ?)
+  `).bind(
+    `log_${crypto.randomUUID()}`,
+    userId,
+    source === 'admin' ? 'CREDIT_ADMIN_REFUND' : 'CREDIT_AUTO_REFUND',
+    `Refunded IDR ${refundAmount} for failed item ${item.id} (${item.product_name}) in order ${orderId}`
+  ).run();
+
+  return { refunded: true, amount: refundAmount };
+}
+
 export async function fulfillOrder(orderId: string, userId: string, env: Env): Promise<{ success: boolean; message: string }> {
   // 1. Fetch order
   const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
@@ -210,49 +302,14 @@ export async function fulfillOrder(orderId: string, userId: string, env: Env): P
   return { success: true, message: 'Order fulfilment processing completed' };
 }
 
-/**
- * Check if the order was paid via credit (debit transaction exists) and refund
- * the price of any failed items back to the user's credit balance.
- */
+/** Refund every failed item that belongs to a saldo-paid order. */
 async function autoRefundFailedItems(orderId: string, userId: string, env: Env): Promise<void> {
-  // Check if this order was paid via credits (look for a debit transaction referencing this order)
-  const creditDebit = await env.DB.prepare(
-    "SELECT * FROM credit_transactions WHERE reference_id = ? AND type = 'debit' LIMIT 1"
-  ).bind(orderId).first<any>();
-
-  if (!creditDebit) return; // Not a credit-paid order
-
   // Find all failed items for this order
   const failedItems = await env.DB.prepare(
     "SELECT * FROM order_items WHERE order_id = ? AND fulfilment_status = 'failed'"
   ).bind(orderId).all<any>();
 
   for (const item of failedItems.results || []) {
-    // Check if we already refunded this item (avoid double refund)
-    const existingRefund = await env.DB.prepare(
-      "SELECT id FROM credit_transactions WHERE reference_id = ? AND type = 'refund' LIMIT 1"
-    ).bind(`refund-${item.id}`).first();
-
-    if (existingRefund) continue;
-
-    const refundAmount = item.price * item.quantity;
-    await refundCredit(
-      env.DB,
-      userId,
-      refundAmount,
-      `refund-${item.id}`,
-      `Auto-refund for failed item: ${item.product_name} (Order: ${orderId})`
-    );
-
-    // Audit log for auto-refund
-    await env.DB.prepare(`
-      INSERT INTO audit_logs (id, user_id, action, details)
-      VALUES (?, ?, ?, ?)
-    `).bind(
-      `log_${crypto.randomUUID()}`,
-      userId,
-      'CREDIT_AUTO_REFUND',
-      `Refunded IDR ${refundAmount} for failed item ${item.id} (${item.product_name}) in order ${orderId}`
-    ).run();
+    await refundFailedOrderItem(orderId, item.id, userId, env, 'auto');
   }
 }

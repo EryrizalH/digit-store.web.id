@@ -446,6 +446,17 @@ describe('Credit System & Sumopod Gateway Tests', () => {
       expect(txn.reference_id).toBe('TOPUP-001');
     });
 
+    it('should reject non-positive or fractional credit additions', async () => {
+      const { addCredit } = await import('../src/services/credits');
+      const db = createMockDb({ balance: 0 });
+
+      await expect(addCredit(db, 'user_123', 0, 'topup')).rejects.toThrow('Invalid credit amount');
+      await expect(addCredit(db, 'user_123', -1000, 'topup')).rejects.toThrow('Invalid credit amount');
+      await expect(addCredit(db, 'user_123', 1000.5, 'topup')).rejects.toThrow('Invalid credit amount');
+      expect((db as any).getBalance()).toBe(0);
+      expect((db as any).getTransactions()).toHaveLength(0);
+    });
+
     it('should debit credit when balance is sufficient and record ledger row', async () => {
       const { debitCredit } = await import('../src/services/credits');
       const db = createMockDb({ balance: 100000 });
@@ -533,6 +544,63 @@ describe('Credit System & Sumopod Gateway Tests', () => {
       expect(txn.type).toBe('refund');
       expect(txn.amount).toBe(25000);
       expect(txn.reference_id).toBe('refund-item_001');
+    });
+
+    it('should make refund retries idempotent', async () => {
+      const { refundCredit } = await import('../src/services/credits');
+      const db = createMockDb({ balance: 50000 });
+
+      const first = await refundCredit(db, 'user_123', 25000, 'refund-item-retry', 'Auto-refund');
+      const second = await refundCredit(db, 'user_123', 25000, 'refund-item-retry', 'Retry refund');
+
+      expect(second.id).toBe(first.id);
+      expect((db as any).getBalance()).toBe(75000);
+      expect((db as any).getTransactions()).toHaveLength(1);
+    });
+
+    it('should return the winner when a concurrent refund hits the unique reference', async () => {
+      const { refundCredit } = await import('../src/services/credits');
+      const winner = {
+        id: 'crtx_winner',
+        user_id: 'user_123',
+        type: 'refund' as const,
+        amount: 25000,
+        reference_id: 'refund-race',
+        description: 'Concurrent winner',
+        created_at: new Date().toISOString()
+      };
+      let refundLookupCount = 0;
+      const db = {
+        prepare: (sql: string) => ({
+          bind: (..._args: any[]) => ({
+            first: async () => {
+              if (sql.includes("type = 'refund'")) {
+                refundLookupCount += 1;
+                return refundLookupCount > 1 ? winner : null;
+              }
+              return null;
+            },
+            run: async () => ({ meta: { changes: 1 } })
+          })
+        }),
+        batch: async () => {
+          throw new Error('UNIQUE constraint failed: credit_transactions.reference_id');
+        }
+      } as unknown as D1Database;
+
+      const result = await refundCredit(db, 'user_123', 25000, 'refund-race', 'Concurrent retry');
+      expect(result).toEqual(winner);
+      expect(refundLookupCount).toBe(2);
+    });
+
+    it('should reject invalid refund amounts before touching the ledger', async () => {
+      const { refundCredit } = await import('../src/services/credits');
+      const db = createMockDb({ balance: 50000 });
+
+      await expect(refundCredit(db, 'user_123', 0, 'refund-invalid')).rejects.toThrow('Invalid credit amount');
+      await expect(refundCredit(db, 'user_123', 99.9, 'refund-invalid-fraction')).rejects.toThrow('Invalid credit amount');
+      expect((db as any).getBalance()).toBe(50000);
+      expect((db as any).getTransactions()).toHaveLength(0);
     });
   });
 

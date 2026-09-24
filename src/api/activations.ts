@@ -4,6 +4,7 @@ import { Env } from '../types';
 import { getSessionUser } from '../services/auth';
 import { HeroSmsClient, HeroSmsError } from '../services/herosms';
 import { checkRateLimit } from '../services/rate-limit';
+import { refundFailedOrderItem } from '../services/fulfilment';
 
 export const activationsRouter = new Hono<{ Bindings: Env }>();
 
@@ -53,6 +54,15 @@ activationsRouter.get('/:id/poll', async (c) => {
           UPDATE sms_activations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
         `).bind(result.status, activation.id).run();
         activation.status = result.status;
+
+        // A paid OTP activation can fail after provisioning. Mark the order
+        // item failed and return its charged wallet amount exactly once.
+        if (activation.order_item_id) {
+          await c.env.DB.prepare(
+            "UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = ? WHERE id = ? AND fulfilment_status = 'fulfilled'"
+          ).bind(`OTP_${result.status}`, activation.order_item_id).run();
+          await refundFailedOrderItem(activation.order_id, activation.order_item_id, activation.user_id, c.env, 'otp');
+        }
       }
     } catch (err: any) {
       return c.json({
@@ -125,7 +135,14 @@ activationsRouter.post('/:id/cancel', async (c) => {
       UPDATE sms_activations SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).bind(activation.id).run();
 
-    return c.json({ success: true, message: 'Activation cancelled' });
+    await c.env.DB.prepare(
+      "UPDATE order_items SET fulfilment_status = 'failed', fulfilment_error = 'OTP_CANCELLED' WHERE id = ? AND fulfilment_status = 'fulfilled'"
+    ).bind(activation.order_item_id).run();
+    const refund = activation.order_item_id
+      ? await refundFailedOrderItem(activation.order_id, activation.order_item_id, activation.user_id, c.env, 'otp')
+      : null;
+
+    return c.json({ success: true, message: 'Activation cancelled', refund });
   } catch (err: any) {
     return c.json({
       error: 'Cancellation failed',

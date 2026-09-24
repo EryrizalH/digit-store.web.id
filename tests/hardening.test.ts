@@ -374,7 +374,19 @@ describe('Follow-up Hardening Verification Tests', () => {
   describe('Issue 5: Atomic Topup Processing and Changes Verification', () => {
     it('does not increment balance if claim update affects 0 rows', async () => {
       const env = createMockEnv();
-      const batchSpy = vi.fn();
+      let credited = 0;
+      const batchSpy = vi.fn(async (statements: any[]) => {
+        // completeTopup uses a conditional batch. Emulate the D1 transaction
+        // by applying the claim result before reporting the dependent steps.
+        const claimResult = await statements[0].run();
+        const claimChanges = claimResult?.meta?.changes ?? 0;
+        if (claimChanges > 0) credited += 1;
+        return [
+          claimResult,
+          { meta: { changes: claimChanges } },
+          { meta: { changes: claimChanges } }
+        ];
+      });
       env.DB.batch = batchSpy;
 
       // Mock gateway Svix verification passing
@@ -432,8 +444,8 @@ describe('Follow-up Hardening Verification Tests', () => {
       expect(res.status).toBe(200);
       const json = await res.json() as any;
       expect(json.status).toBe('OK');
-      // DB.batch to credit user balance was NEVER called because changes === 0
-      expect(batchSpy).not.toHaveBeenCalled();
+      expect(batchSpy).toHaveBeenCalledTimes(1);
+      expect(credited).toBe(0);
 
       // Restore prototype
       SumopodGateway.prototype.verifyWebhook = origVerify;

@@ -7,6 +7,41 @@ import { createInAppNotification, sendNotificationWebhook } from '../services/no
 
 export const webhooksRouter = new Hono<{ Bindings: Env }>();
 
+/**
+ * Complete a pending wallet topup as one D1 transaction. The first statement
+ * claims the pending ledger row; the following statements use SQLite's
+ * changes() value so a duplicate callback cannot credit the wallet twice.
+ */
+async function completeTopup(
+  db: D1Database,
+  topupTxn: { user_id: string; amount: number; reference_id: string },
+  description: string,
+  auditDetails: string
+): Promise<boolean> {
+  if (!Number.isSafeInteger(Number(topupTxn.amount)) || Number(topupTxn.amount) <= 0) {
+    throw new Error('Invalid topup amount');
+  }
+  const results = await db.batch([
+    db.prepare(
+      "UPDATE credit_transactions SET type = 'topup', description = ? WHERE reference_id = ? AND type = 'topup_pending'"
+    ).bind(description, topupTxn.reference_id),
+    db.prepare(`
+      INSERT INTO user_credits (user_id, balance, updated_at)
+      SELECT ?, ?, CURRENT_TIMESTAMP
+      WHERE (SELECT changes()) > 0
+      ON CONFLICT(user_id) DO UPDATE SET balance = balance + excluded.balance, updated_at = CURRENT_TIMESTAMP
+    `).bind(topupTxn.user_id, topupTxn.amount),
+    db.prepare(`
+      INSERT INTO audit_logs (id, user_id, action, details)
+      SELECT ?, ?, ?, ?
+      WHERE (SELECT changes()) > 0
+    `).bind(`log_${crypto.randomUUID()}`, topupTxn.user_id, 'CREDIT_TOPUP_COMPLETED', auditDetails)
+  ]);
+
+  const changes = results?.[0]?.meta?.changes ?? (results?.[0] as any)?.changes ?? 0;
+  return Number(changes) > 0;
+}
+
 // Midtrans Webhook Callback
 webhooksRouter.post('/midtrans', async (c) => {
   let payload: any;
@@ -162,35 +197,12 @@ webhooksRouter.post('/sumopod', async (c) => {
           return c.json({ error: 'Topup amount mismatch' }, 400);
         }
 
-        // Atomic claim: update pending to completed. Only the single transaction that successfully
-        // transitions 'topup_pending' -> 'topup' will see changes > 0 and proceed to credit the balance.
-        const claimResult = await c.env.DB.prepare(
-          "UPDATE credit_transactions SET type = 'topup', description = ? WHERE reference_id = ? AND type = 'topup_pending'"
-        ).bind(`Topup completed via Sumopod (${paymentId})`, orderId).run();
-
-        const changes = claimResult?.meta?.changes ?? (claimResult as any)?.changes ?? 0;
-        if (changes === 0) {
-          // Already claimed by a concurrent webhook call
-          return c.json({ status: 'OK' });
-        }
-
-        // Exactly one winner claimed the topup: increment user balance and write audit log
-        await c.env.DB.batch([
-          c.env.DB.prepare(`
-            INSERT INTO user_credits (user_id, balance, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-          `).bind(topupTxn.user_id, topupTxn.amount, topupTxn.amount),
-          c.env.DB.prepare(`
-            INSERT INTO audit_logs (id, user_id, action, details)
-            VALUES (?, ?, ?, ?)
-          `).bind(
-            `log_${crypto.randomUUID()}`,
-            topupTxn.user_id,
-            'CREDIT_TOPUP_COMPLETED',
-            `Topup ${orderId} credited IDR ${topupTxn.amount}`
-          )
-        ]);
+        await completeTopup(
+          c.env.DB,
+          { user_id: topupTxn.user_id, amount: Number(topupTxn.amount), reference_id: orderId },
+          `Topup completed via Sumopod (${paymentId})`,
+          `Topup ${orderId} credited IDR ${topupTxn.amount}`
+        );
       } else if (status === 'failed') {
         await c.env.DB.prepare(
           "DELETE FROM credit_transactions WHERE reference_id = ? AND type = 'topup_pending'"
@@ -259,6 +271,9 @@ webhooksRouter.post('/qris', async (c) => {
         'SELECT * FROM credit_transactions WHERE reference_id = ? AND type = "topup" LIMIT 1'
       ).bind(orderId).first<any>();
       if (existingCompleted) {
+        if (status !== 'paid') {
+          return c.json({ status: 'OK' });
+        }
         const expectedAmount = Math.round(Number(existingCompleted.amount));
         const paidAmount = Math.round(Number(grossAmount));
         if (!Number.isFinite(expectedAmount) || !Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
@@ -291,30 +306,12 @@ webhooksRouter.post('/qris', async (c) => {
         return c.json({ error: 'Topup amount mismatch' }, 400);
       }
 
-      const claimResult = await c.env.DB.prepare(
-        'UPDATE credit_transactions SET type = "topup", description = ? WHERE reference_id = ? AND type = "topup_pending"'
-      ).bind(`Topup completed via QRIS (${paymentId})`, orderId).run();
-      const changes = claimResult.meta?.changes ?? 0;
-      if (changes === 0) {
-        return c.json({ status: 'OK' });
-      }
-
-      await c.env.DB.batch([
-        c.env.DB.prepare(`
-          INSERT INTO user_credits (user_id, balance, updated_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-        `).bind(topupTxn.user_id, topupTxn.amount, topupTxn.amount),
-        c.env.DB.prepare(`
-          INSERT INTO audit_logs (id, user_id, action, details)
-          VALUES (?, ?, ?, ?)
-        `).bind(
-          `log_${crypto.randomUUID()}`,
-          topupTxn.user_id,
-          'CREDIT_TOPUP_COMPLETED',
-          `Topup ${orderId} credited IDR ${topupTxn.amount} via QRIS`
-        )
-      ]);
+      await completeTopup(
+        c.env.DB,
+        { user_id: topupTxn.user_id, amount: Number(topupTxn.amount), reference_id: orderId },
+        `Topup completed via QRIS (${paymentId})`,
+        `Topup ${orderId} credited IDR ${topupTxn.amount} via QRIS`
+      );
 
       return c.json({ status: 'OK' });
     }
@@ -329,9 +326,11 @@ webhooksRouter.post('/qris', async (c) => {
     }
 
     const expectedAmount = Math.round(Number(order.total_amount));
-    const paidAmount = Math.round(Number(grossAmount));
-    if (!Number.isFinite(expectedAmount) || !Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
-      return c.json({ error: 'Payment amount mismatch' }, 400);
+    if (status === 'paid') {
+      const paidAmount = Math.round(Number(grossAmount));
+      if (!Number.isFinite(expectedAmount) || !Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
+        return c.json({ error: 'Payment amount mismatch' }, 400);
+      }
     }
 
     if (order.payment_status === 'paid') {

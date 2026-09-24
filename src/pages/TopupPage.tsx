@@ -109,6 +109,11 @@ export const TopupPage: React.FC = () => {
             setTopupSuccess(true);
             void fetchBalance();
             void fetchHistory();
+          } else if (statusData.status === 'failed') {
+            setError('QRIS topup sudah kedaluwarsa. Silakan buat topup baru.');
+            setActiveTopup(null);
+            setTopupSuccess(false);
+            void fetchHistory();
           }
         }
       } catch {

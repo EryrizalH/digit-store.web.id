@@ -40,7 +40,7 @@ export type Role = 'user' | 'admin';
 export type ProductType = 'file' | 'code' | 'herosms';
 export type DeliveryMode = 'instant' | 'manual';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type DeliveryStatus = 'awaiting_payment' | 'processing' | 'fulfilled' | 'failed' | 'refunded';
+export type DeliveryStatus = 'awaiting_payment' | 'processing' | 'fulfilled' | 'failed' | 'refunded' | 'partially_refunded';
 export type ActivationStatus = 'WAITING_CODE' | 'RECEIVED' | 'CANCELLED' | 'TIMEOUT' | 'COMPLETED';
 export type CreditTransactionType = 'topup' | 'topup_pending' | 'debit' | 'refund';
 

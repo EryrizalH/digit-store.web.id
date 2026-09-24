@@ -1,5 +1,11 @@
 import { CreditTransaction, CreditTransactionType, UserCredit } from '../types';
 
+function assertPositiveIntegerAmount(amount: number): void {
+  if (!Number.isSafeInteger(amount) || amount <= 0) {
+    throw new Error('Invalid credit amount');
+  }
+}
+
 export async function getBalance(db: D1Database, userId: string): Promise<number> {
   const row = await db.prepare('SELECT balance FROM user_credits WHERE user_id = ?')
     .bind(userId).first<{ balance: number }>();
@@ -14,6 +20,10 @@ export async function addCredit(
   referenceId?: string,
   description?: string
 ): Promise<CreditTransaction> {
+  // Credit values represent whole IDR units. Reject malformed values before
+  // touching either the balance or the ledger.
+  assertPositiveIntegerAmount(amount);
+
   const txnId = `crtx_${crypto.randomUUID()}`;
 
   const balanceStmt = db.prepare(`
@@ -136,5 +146,28 @@ export async function refundCredit(
   referenceId?: string,
   description?: string
 ): Promise<CreditTransaction> {
-  return addCredit(db, userId, amount, 'refund', referenceId, description);
+  assertPositiveIntegerAmount(amount);
+
+  // Refunds are retried by fulfillment workers and admins. Return the
+  // existing ledger row so a retry cannot credit the wallet twice.
+  if (referenceId) {
+    const existing = await db.prepare(
+      "SELECT * FROM credit_transactions WHERE reference_id = ? AND type = 'refund' LIMIT 1"
+    ).bind(referenceId).first<CreditTransaction>();
+    if (existing) return existing;
+  }
+
+  try {
+    return await addCredit(db, userId, amount, 'refund', referenceId, description);
+  } catch (err: any) {
+    // A unique refund-reference index makes concurrent retries fail one
+    // insert. If the winner committed, return its row to the loser.
+    if (referenceId) {
+      const existing = await db.prepare(
+        "SELECT * FROM credit_transactions WHERE reference_id = ? AND type = 'refund' LIMIT 1"
+      ).bind(referenceId).first<CreditTransaction>();
+      if (existing) return existing;
+    }
+    throw err;
+  }
 }
