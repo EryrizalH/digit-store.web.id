@@ -307,6 +307,61 @@ describe('In-Store QRIS Endpoints', () => {
     }
   });
 
+  it('POST /api/orders/:id/regenerate-qris restores payment_status to pending on success', async () => {
+    const user = { id: 'u1', email: 'test@example.com', role: 'user' };
+    const executedQueries: { query: string; args: any[] }[] = [];
+    const prepare = vi.fn((query: string) => {
+      const stmt: any = {
+        bind: vi.fn((...args: any[]) => {
+          executedQueries.push({ query, args });
+          return stmt;
+        }),
+        first: vi.fn(async () => {
+          if (query.includes('FROM sessions')) return { user_id: 'u1', expires_at: Date.now() + 100000 };
+          if (query.includes('FROM users')) return user;
+          if (query.includes('SELECT * FROM orders WHERE id = ?')) {
+            return { id: 'ORD-EXPIRED', user_id: 'u1', total_amount: 10000, payment_provider: 'qris', payment_status: 'failed' };
+          }
+          return null;
+        }),
+        all: vi.fn(async () => ({ results: [] })),
+        run: vi.fn(async () => ({ success: true, meta: { changes: 1 } }))
+      };
+      return stmt;
+    });
+
+    const env = createMockEnv({ prepare });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: {
+        qris_id: 'qris_new_123',
+        trx_id: 'TRX_NEW_123',
+        qris_url: 'https://pay.example/qr/qris_new_123',
+        qris_code: '000201...',
+        expires_at: new Date(Date.now() + 300000).toISOString()
+      }
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const res = await app.request('/api/orders/ORD-EXPIRED/regenerate-qris', {
+        method: 'POST',
+        headers: { Cookie: 'session=sess_123', 'Content-Type': 'application/json' }
+      }, env);
+
+      expect(res.status).toBe(200);
+      const data = await res.json() as any;
+      expect(data.success).toBe(true);
+      expect(data.paymentId).toBe('qris_new_123');
+
+      const updateQuery = executedQueries.find((q) => q.query.includes('UPDATE orders SET payment_id = ?, payment_status = \'pending\''));
+      expect(updateQuery).toBeDefined();
+      expect(updateQuery?.args).toEqual(['qris_new_123', 'ORD-EXPIRED']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('POST /api/orders/checkout returns 502 JSON and rolls back if gateway throws', async () => {
     const user = { id: 'u1', email: 'test@example.com', role: 'user' };
     const product = { id: 'p1', name: 'Software', type: 'code', price: 15000, is_active: 1 };

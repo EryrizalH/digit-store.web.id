@@ -345,7 +345,7 @@ webhooksRouter.post('/qris', async (c) => {
     }
 
     const transitionResult = await c.env.DB.prepare(
-      'UPDATE orders SET payment_id = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_status != "paid"'
+      'UPDATE orders SET payment_id = COALESCE(NULLIF(?, ""), payment_id), payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_status != "paid"'
     ).bind(paymentId, status, orderId).run();
     const transitionChanges = transitionResult.meta?.changes ?? 0;
 

@@ -923,7 +923,7 @@ ordersRouter.post('/:id/regenerate-qris', async (c) => {
   }
 
   if (paymentResult.paymentId) {
-    await c.env.DB.prepare('UPDATE orders SET payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    await c.env.DB.prepare('UPDATE orders SET payment_id = ?, payment_status = \'pending\', updated_at = CURRENT_TIMESTAMP WHERE id = ?')
       .bind(paymentResult.paymentId, orderId).run();
   }
 
