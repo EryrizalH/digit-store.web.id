@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Order, OrderItem, FileEntitlement, OrderStockAllocation, SmsActivation, Product } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { Download, Key, Smartphone, Copy, Check, Clock, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle, ShoppingCart } from 'lucide-react';
+import { Download, Key, Smartphone, Copy, Check, Clock, ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, AlertCircle, ShoppingCart, QrCode } from 'lucide-react';
 import { SmsActivationViewer } from '../components/SmsActivationViewer';
 
 interface OrderDetailData {
@@ -34,6 +34,10 @@ export const OrdersPage: React.FC = () => {
   const [reportMessage, setReportMessage] = useState('');
   const [reportSending, setReportSending] = useState(false);
   const [reportResult, setReportResult] = useState<string | null>(null);
+  const [qrisTimestamp, setQrisTimestamp] = useState(Date.now());
+  const [regeneratingQris, setRegeneratingQris] = useState(false);
+  const [qrisRegenerateError, setQrisRegenerateError] = useState<string | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -107,6 +111,57 @@ export const OrdersPage: React.FC = () => {
     }, 5000);
     return () => window.clearInterval(interval);
   }, [user, id, orderDetail?.order.delivery_status]);
+
+  useEffect(() => {
+    if (!orderDetail || orderDetail.order.payment_status !== 'pending' || orderDetail.order.payment_provider !== 'qris') {
+      setTimeLeft(null);
+      return;
+    }
+
+    const createdAtMs = new Date(orderDetail.order.created_at).getTime();
+    const expiryMs = createdAtMs + 5 * 60 * 1000;
+    const remainingSeconds = Math.max(0, Math.floor((expiryMs - Date.now()) / 1000));
+    setTimeLeft(remainingSeconds);
+
+    const timer = window.setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [orderDetail?.order.id, orderDetail?.order.payment_status, qrisTimestamp]);
+
+  const handleRegenerateQris = async () => {
+    if (!orderDetail) return;
+    setRegeneratingQris(true);
+    setQrisRegenerateError(null);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderDetail.order.id)}/regenerate-qris`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = (await res.json()) as any;
+      if (!res.ok) throw new Error(data.error || 'Gagal generate ulang QRIS');
+      setQrisTimestamp(Date.now());
+      setTimeLeft(300);
+      void fetchOrderDetail(orderDetail.order.id, true);
+    } catch (err: any) {
+      setQrisRegenerateError(err.message || 'Gagal generate QRIS baru');
+    } finally {
+      setRegeneratingQris(false);
+    }
+  };
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // ponytail: native safe clipboard copy with user feedback
   const copyToClipboard = async (text: string) => {
@@ -358,6 +413,81 @@ export const OrdersPage: React.FC = () => {
                   <p className="text-xs text-rose-200 mt-2">Tim support dapat melakukan retry atau refund untuk item yang gagal.</p>
                 )}
               </div>
+
+              {/* In-Store Interactive QRIS Payment Card */}
+              {orderDetail.order.payment_status === 'pending' && orderDetail.order.payment_provider === 'qris' && (
+                <section aria-labelledby="qris-payment-title" className="rounded-2xl border border-indigo-500/40 bg-indigo-950/20 p-5 sm:p-6 space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-900/50 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 id="qris-payment-title" className="text-sm font-extrabold text-white">Pembayaran QRIS Dinamis</h4>
+                        <p className="text-xs text-slate-400">Scan via DANA, GoPay, OVO, ShopeePay, BCA, Mandiri, atau E-Wallet apa saja</p>
+                      </div>
+                    </div>
+                    {timeLeft !== null && timeLeft > 0 && (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/80 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold">
+                        <Clock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                        <span>Sisa Waktu: {formatTimer(timeLeft)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center space-y-4 py-2">
+                    <div className="relative group bg-white p-3.5 rounded-2xl shadow-2xl border-2 border-indigo-500/30">
+                      <img
+                        src={`/api/orders/${encodeURIComponent(orderDetail.order.id)}/qr?t=${qrisTimestamp}`}
+                        alt="QR Code Pembayaran QRIS"
+                        className="w-52 h-52 sm:w-60 sm:h-60 object-contain rounded-lg"
+                      />
+                      {timeLeft === 0 && (
+                        <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs rounded-2xl flex flex-col items-center justify-center p-4 text-center">
+                          <AlertTriangle className="w-8 h-8 text-amber-400 mb-2" />
+                          <span className="text-xs font-bold text-white mb-1">QRIS Kedaluwarsa</span>
+                          <span className="text-[11px] text-slate-300 mb-3">Waktu pembayaran 5 menit telah berakhir</span>
+                          <button
+                            type="button"
+                            onClick={() => void handleRegenerateQris()}
+                            disabled={regeneratingQris}
+                            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${regeneratingQris ? 'animate-spin' : ''}`} />
+                            {regeneratingQris ? 'Membuat QRIS...' : 'Generate QRIS Baru'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-center space-y-1">
+                      <span className="text-xs text-slate-400">Total Tagihan Pembayaran:</span>
+                      <p className="text-2xl sm:text-3xl font-black text-emerald-400">
+                        {formatPrice(orderDetail.order.total_amount)}
+                      </p>
+                    </div>
+
+                    {qrisRegenerateError && (
+                      <p className="text-xs text-rose-300">{qrisRegenerateError}</p>
+                    )}
+
+                    <div className="w-full max-w-sm rounded-xl border border-slate-800 bg-slate-900/60 p-3.5 space-y-2 text-xs text-slate-300">
+                      <div className="flex items-center justify-between font-semibold text-slate-200">
+                        <span>Langkah Pembayaran:</span>
+                        <span className="text-[11px] text-indigo-300 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3 animate-spin" /> Verifikasi Otomatis
+                        </span>
+                      </div>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-400 leading-relaxed text-[11px]">
+                        <li>Buka aplikasi <strong>DANA</strong> atau e-wallet / banking lainnya.</li>
+                        <li>Pilih menu <strong>Scan / Bayar</strong> dan arahkan kamera ke kode QR di atas.</li>
+                        <li>Pastikan nama merchant <strong>Ery-store</strong> dan nominal sesuai.</li>
+                        <li>Konfirmasi pembayaran. Pesanan Anda akan langsung diproses seketika berhasil!</li>
+                      </ol>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {reorderMessage && (
                 <div role="status" className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-xs text-indigo-200">

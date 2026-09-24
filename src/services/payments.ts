@@ -254,6 +254,8 @@ export class QrisGateway implements PaymentGateway {
     const qrisId = dataObject && 'qris_id' in dataObject ? dataObject.qris_id : undefined;
     const trxId = dataObject && 'trx_id' in dataObject ? dataObject.trx_id : undefined;
     const qrisUrl = dataObject && 'qris_url' in dataObject ? dataObject.qris_url : undefined;
+    const qrisCode = dataObject && 'qris_code' in dataObject && typeof dataObject.qris_code === 'string' ? dataObject.qris_code : undefined;
+    const expiresAt = dataObject && 'expires_at' in dataObject && typeof dataObject.expires_at === 'string' ? dataObject.expires_at : undefined;
     if (typeof qrisId !== 'string' || !qrisId ||
       typeof trxId !== 'string' || !trxId ||
       typeof qrisUrl !== 'string' || !qrisUrl) {
@@ -263,8 +265,17 @@ export class QrisGateway implements PaymentGateway {
     return {
       paymentId: qrisId,
       redirectUrl: qrisUrl,
+      qrString: qrisCode,
+      expiresAt,
       raw: body
     };
+  }
+
+  async fetchQrImage(paymentId: string): Promise<Response> {
+    if (!this.apiBaseUrl) {
+      throw new Error('QRIS API base URL is not configured');
+    }
+    return fetch(`${this.apiBaseUrl}/qr/${encodeURIComponent(paymentId)}?format=raw`);
   }
 
   async verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }> {

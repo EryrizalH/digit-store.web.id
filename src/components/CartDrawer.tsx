@@ -108,12 +108,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
 
       clearCart();
       closeCart();
-
-      if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-      } else {
-        onSuccessOrder(data.orderId);
-      }
+      onSuccessOrder(data.orderId);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -241,7 +236,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                       <div>
                         <p className="text-sm font-bold text-indigo-200">QRIS</p>
                         <p className="mt-1 text-xs leading-relaxed text-slate-300">
-                          Anda akan diarahkan ke halaman QRIS untuk menyelesaikan pembayaran.
+                          Bayar langsung dengan scan QRIS di halaman pesanan toko.
                         </p>
                       </div>
                     </div>

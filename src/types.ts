@@ -273,6 +273,8 @@ export interface CreateTransactionResult {
   paymentId: string;
   redirectUrl?: string;
   qrCodeUrl?: string;
+  qrString?: string;
+  expiresAt?: string;
   raw?: any;
 }
 

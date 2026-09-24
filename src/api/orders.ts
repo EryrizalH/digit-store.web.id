@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { Env, User } from '../types';
 import { getSessionUser } from '../services/auth';
-import { getPaymentGateway } from '../services/payments';
+import { getPaymentGateway, QrisGateway } from '../services/payments';
 import { fulfillOrder } from '../services/fulfilment';
 import { debitCredit, refundCredit } from '../services/credits';
 import { checkRateLimit } from '../services/rate-limit';
@@ -408,7 +408,10 @@ ordersRouter.post('/checkout', async (c) => {
     referralCode: appliedReferralCode,
     paymentProvider: provider,
     redirectUrl: paymentResult.redirectUrl,
-    paymentId: paymentResult.paymentId
+    paymentId: paymentResult.paymentId,
+    qrString: paymentResult.qrString || null,
+    qrImageUrl: provider === 'qris' && paymentResult.paymentId ? `/api/orders/${orderId}/qr` : null,
+    expiresAt: paymentResult.expiresAt || null
   });
 });
 
@@ -715,12 +718,17 @@ ordersRouter.get('/:id', async (c) => {
   const failedItemCount = items.filter((item: any) => item.fulfilment_status === 'failed').length;
   const pendingItemCount = items.filter((item: any) => !item.fulfilment_status || item.fulfilment_status === 'pending' || item.fulfilment_status === 'processing').length;
   const fulfilledItemCount = items.filter((item: any) => item.fulfilment_status === 'fulfilled').length;
+  const isQrisPending = order.payment_status === 'pending' && order.payment_provider === 'qris' && !!order.payment_id;
   const publicOrder = {
     ...order,
     delivery_status: getDeliveryStatus(order.payment_status, items),
     failed_item_count: failedItemCount,
     pending_item_count: pendingItemCount,
-    fulfilled_item_count: fulfilledItemCount
+    fulfilled_item_count: fulfilledItemCount,
+    qris: isQrisPending ? {
+      paymentId: order.payment_id,
+      qrImageUrl: `/api/orders/${order.id}/qr`
+    } : null
   };
 
   // Entitlements & Allocations
@@ -747,6 +755,72 @@ ordersRouter.get('/:id', async (c) => {
     stockCodes: stockAllocations.results || [],
     fileEntitlements: fileEntitlements.results || [],
     smsActivations
+  });
+});
+
+// Proxy QRIS image directly to protect user privacy and avoid exposing gateway domain
+ordersRouter.get('/:id/qr', async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const orderId = c.req.param('id');
+  const order = await c.env.DB.prepare('SELECT payment_id, payment_provider, payment_status FROM orders WHERE id = ? AND (user_id = ? OR ? = "admin")')
+    .bind(orderId, user.id, user.role).first<any>();
+
+  if (!order || !order.payment_id || order.payment_provider !== 'qris') {
+    return c.json({ error: 'QRIS not available for this order' }, 404);
+  }
+
+  const gateway = getPaymentGateway('qris', c.env) as QrisGateway;
+  try {
+    const qrRes = await gateway.fetchQrImage(order.payment_id);
+    if (!qrRes.ok) {
+      return c.json({ error: 'Failed to fetch QR image from gateway' }, qrRes.status as any);
+    }
+    const contentType = qrRes.headers.get('content-type') || 'image/png';
+    return new Response(qrRes.body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=60'
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Error fetching QR image' }, 502);
+  }
+});
+
+// Regenerate QRIS for an existing unpaid order
+ordersRouter.post('/:id/regenerate-qris', async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const orderId = c.req.param('id');
+  const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ? AND (user_id = ? OR ? = "admin")')
+    .bind(orderId, user.id, user.role).first<any>();
+
+  if (!order) return c.json({ error: 'Order not found' }, 404);
+  if (order.payment_status === 'paid') return c.json({ error: 'Order is already paid' }, 400);
+
+  const gateway = getPaymentGateway('qris', c.env);
+  const paymentResult = await gateway.createTransaction({
+    orderId,
+    amount: order.total_amount,
+    customerEmail: user.email,
+    items: []
+  });
+
+  if (paymentResult.paymentId) {
+    await c.env.DB.prepare('UPDATE orders SET payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(paymentResult.paymentId, orderId).run();
+  }
+
+  return c.json({
+    success: true,
+    paymentId: paymentResult.paymentId,
+    qrImageUrl: `/api/orders/${orderId}/qr`,
+    qrString: paymentResult.qrString || null,
+    expiresAt: paymentResult.expiresAt || null
   });
 });
 

@@ -117,4 +117,39 @@ describe('QrisGateway', () => {
     expect(gateway).toBeInstanceOf(QrisGateway);
     expect(gateway.name).toBe('qris');
   });
+
+  it('fetches raw QR image through gateway and extracts full qris metadata', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/create-qris')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          success: true,
+          data: {
+            qris_id: 'qris_abc',
+            trx_id: 'TRX-ABC',
+            qris_url: 'https://pay.example/qr/qris_abc',
+            qris_code: '000201010212...',
+            expires_at: '2026-09-24T12:00:00.000Z'
+          }
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response('fake-png-bytes', {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' }
+      }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const gateway = new QrisGateway('https://pay.example', 'api-key');
+      const res = await gateway.createTransaction(options);
+      expect(res.qrString).toBe('000201010212...');
+      expect(res.expiresAt).toBe('2026-09-24T12:00:00.000Z');
+
+      const imgRes = await gateway.fetchQrImage('qris_abc');
+      expect(fetchMock).toHaveBeenCalledWith('https://pay.example/qr/qris_abc?format=raw');
+      expect(imgRes.headers.get('Content-Type')).toBe('image/png');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

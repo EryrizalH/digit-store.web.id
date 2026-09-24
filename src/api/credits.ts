@@ -3,7 +3,7 @@ import { getCookie } from 'hono/cookie';
 import { Env, User } from '../types';
 import { getSessionUser } from '../services/auth';
 import { getBalance } from '../services/credits';
-import { getPaymentGateway } from '../services/payments';
+import { getPaymentGateway, QrisGateway } from '../services/payments';
 
 export const creditsRouter = new Hono<{ Bindings: Env; Variables: { user?: User } }>();
 
@@ -55,8 +55,8 @@ creditsRouter.post('/topup', async (c) => {
   // Store the pending QRIS topup before returning the payment URL.
   await c.env.DB.prepare(`
     INSERT INTO credit_transactions (id, user_id, type, amount, reference_id, description, created_at)
-    VALUES (?, ?, 'topup_pending', ?, ?, 'Pending topup via QRIS', CURRENT_TIMESTAMP)
-  `).bind(`crtx_${crypto.randomUUID()}`, user.id, topupAmount, topupId).run();
+    VALUES (?, ?, 'topup_pending', ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(`crtx_${crypto.randomUUID()}`, user.id, topupAmount, topupId, `Pending topup via QRIS (${result.paymentId})`).run();
 
   // Audit log
   await c.env.DB.prepare(`
@@ -68,7 +68,67 @@ creditsRouter.post('/topup', async (c) => {
     success: true,
     topupId,
     redirectUrl: result.redirectUrl,
-    paymentId: result.paymentId
+    paymentId: result.paymentId,
+    qrString: result.qrString || null,
+    qrImageUrl: `/api/credits/topup/${topupId}/qr`,
+    expiresAt: result.expiresAt || null,
+    amount: topupAmount
+  });
+});
+
+// Proxy QR image for Topup transactions
+creditsRouter.get('/topup/:id/qr', async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
+
+  const topupId = c.req.param('id');
+  const txn = await c.env.DB.prepare(
+    'SELECT * FROM credit_transactions WHERE reference_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1'
+  ).bind(topupId, user.id).first<any>();
+
+  if (!txn) return c.json({ error: 'Topup transaction not found' }, 404);
+
+  const match = typeof txn.description === 'string' ? txn.description.match(/QRIS \(([^)]+)\)/) : null;
+  const paymentId = match ? match[1] : null;
+  if (!paymentId) return c.json({ error: 'Payment identifier not found' }, 404);
+
+  const gateway = getPaymentGateway('qris', c.env) as QrisGateway;
+  try {
+    const qrRes = await gateway.fetchQrImage(paymentId);
+    if (!qrRes.ok) {
+      return c.json({ error: 'Failed to fetch QR image from gateway' }, qrRes.status as any);
+    }
+    const contentType = qrRes.headers.get('content-type') || 'image/png';
+    return new Response(qrRes.body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=60'
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message || 'Error fetching QR image' }, 502);
+  }
+});
+
+// Real-time status check for Topup
+creditsRouter.get('/topup/:id/status', async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: 'Authentication required' }, 401);
+
+  const topupId = c.req.param('id');
+  const txn = await c.env.DB.prepare(
+    'SELECT * FROM credit_transactions WHERE reference_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1'
+  ).bind(topupId, user.id).first<any>();
+
+  if (!txn) return c.json({ error: 'Topup transaction not found' }, 404);
+
+  const balance = await getBalance(c.env.DB, user.id);
+  return c.json({
+    topupId,
+    status: txn.type === 'topup' ? 'paid' : txn.type === 'topup_pending' ? 'pending' : 'failed',
+    amount: txn.amount,
+    balance
   });
 });
 

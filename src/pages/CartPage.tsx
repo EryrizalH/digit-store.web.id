@@ -107,21 +107,7 @@ export const CartPage: React.FC = () => {
       }
 
       clearCart();
-
-      const redirectUrl = typeof data.redirectUrl === 'string' ? data.redirectUrl : '';
-      let canRedirectToGateway = false;
-      if (redirectUrl) {
-        try {
-          canRedirectToGateway = new URL(redirectUrl).protocol === 'https:';
-        } catch {
-          canRedirectToGateway = false;
-        }
-      }
-      if (canRedirectToGateway) {
-        window.location.href = redirectUrl;
-      } else {
-        navigate(`/pesanan/${data.orderId}`);
-      }
+      navigate(`/pesanan/${data.orderId}`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -271,7 +257,7 @@ export const CartPage: React.FC = () => {
                   <span className="text-left">
                     <span className="block">QRIS</span>
                     <span className="mt-1 block text-[10px] font-normal leading-relaxed text-slate-400">
-                      Lanjut ke halaman QRIS
+                      Bayar langsung di halaman pesanan
                     </span>
                   </span>
                 </button>
