@@ -30,7 +30,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
     if (res.success) {
       navigate(nextUrl, { replace: true });
     } else {
-      setError(res.error || 'Operasi auth gagal');
+      setError(res.error || (mode === 'login' ? 'Gagal masuk ke akun' : 'Gagal mendaftar akun'));
     }
   };
 
@@ -43,13 +43,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
       <div className="glass-modal space-y-5 rounded-3xl border border-slate-700/60 p-5 sm:space-y-6 sm:p-8">
         <div>
           <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
-            <ShieldCheck className="w-4 h-4" /> DigitStore Auth
+            <ShieldCheck className="w-4 h-4" /> Akun DigitStore
           </span>
           <h1 className="text-2xl font-black text-white">
             {mode === 'login' ? 'Masuk ke Akun' : 'Daftar Akun Baru'}
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Akses riwayat pesanan, unduhan file privat R2, dan lisensi Anda.
+            Akses riwayat pesanan, download file instan & aman, serta lisensi Anda.
           </p>
         </div>
 

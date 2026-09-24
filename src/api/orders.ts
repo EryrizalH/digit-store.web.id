@@ -93,12 +93,12 @@ ordersRouter.post('/checkout', async (c) => {
       // 1-unit quantity enforcement: reject anything else
       const rawQty = item.quantity;
       if (typeof rawQty !== 'number' || !Number.isInteger(rawQty) || rawQty !== 1) {
-        return c.json({ error: 'Jumlah produk HeroSMS OTP harus tepat 1 per item.' }, 400);
+        return c.json({ error: 'Jumlah produk layanan SMS OTP harus tepat 1 per item.' }, 400);
       }
 
       // Strict boolean policy check: agreed_policy must be exactly true
       if (agreed_policy !== true) {
-        return c.json({ error: 'Anda harus menyetujui syarat & kebijakan penggunaan HeroSMS OTP.' }, 400);
+        return c.json({ error: 'Anda harus menyetujui syarat & kebijakan penggunaan layanan SMS OTP.' }, 400);
       }
 
       const settings = await getOtpSettings(c.env.DB);
@@ -108,7 +108,7 @@ ordersRouter.post('/checkout', async (c) => {
       }
 
       if (!c.env.HEROSMS_API_KEY && c.env.APP_ENV !== 'development') {
-        return c.json({ error: 'Gagal memverifikasi katalog dari provider HeroSMS' }, 502);
+        return c.json({ error: 'Gagal memverifikasi katalog layanan aktivasi SMS' }, 502);
       }
 
       const serviceCode = item.service_code || item.serviceCode;
@@ -147,7 +147,7 @@ ordersRouter.post('/checkout', async (c) => {
 
         if (!matchedService || !matchedCountry) {
           if (c.env.HEROSMS_API_KEY || c.env.APP_ENV !== 'development') {
-            return c.json({ error: 'Gagal memverifikasi katalog dari provider HeroSMS' }, 502);
+            return c.json({ error: 'Gagal memverifikasi katalog layanan aktivasi SMS' }, 502);
           }
         }
 
@@ -157,7 +157,7 @@ ordersRouter.post('/checkout', async (c) => {
       } catch {
         if (c.env.HEROSMS_API_KEY || c.env.APP_ENV !== 'development') {
           // Fail closed when configured API key lookup throws error or missing config in prod
-          return c.json({ error: 'Gagal memverifikasi katalog dari provider HeroSMS' }, 502);
+          return c.json({ error: 'Gagal memverifikasi katalog layanan aktivasi SMS' }, 502);
         }
         // Mock/no-key mode in dev: server-owned mock values only
         currentProviderCost = 0.15;
@@ -176,7 +176,7 @@ ordersRouter.post('/checkout', async (c) => {
       const isValidExpiryWindow = Number.isFinite(expiresAt) && expiresAt >= now && expiresAt <= (now + 65000);
       if (!Number.isFinite(clientPrice) || clientPrice <= 0 || !isValidExpiryWindow || clientPrice !== freshSellingPrice) {
         return c.json({
-          error: 'Harga layanan OTP telah berubah atau kuotasi kedaluwarsa. Silakan periksa kembali keranjang Anda.',
+          error: 'Harga layanan SMS OTP telah diperbarui atau batas waktu telah berakhir. Silakan periksa kembali keranjang Anda.',
           code: 'OTP_PRICE_CHANGED',
           freshQuote: {
             productId: product.id,

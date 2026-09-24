@@ -33,7 +33,7 @@ export const AuthModal: React.FC = () => {
     setLoading(false);
 
     if (!res.success) {
-      setError(res.error || 'Operasi gagal');
+      setError(res.error || (mode === 'login' ? 'Gagal masuk ke akun' : 'Gagal mendaftar akun'));
     }
   };
 
@@ -53,7 +53,7 @@ export const AuthModal: React.FC = () => {
       <div className="glass-modal max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700/50 p-5 shadow-2xl sm:p-8">
         <button
           onClick={closeAuthModal}
-          aria-label="Tutup dialog autentikasi"
+          aria-label="Tutup dialog"
           className="absolute top-5 right-5 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-white rounded-full bg-slate-900/60 focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <X className="w-5 h-5" />
@@ -63,7 +63,7 @@ export const AuthModal: React.FC = () => {
           {mode === 'login' ? 'Masuk ke Akun' : user?.is_guest ? 'Amankan Akun Tamu' : 'Daftar Akun Baru'}
         </h2>
         <p className="text-xs text-slate-400 mb-6">
-          Akses riwayat pesanan, unduhan file, dan lisensi Anda.
+          Akses riwayat pesanan, download file instan & aman, serta lisensi Anda.
         </p>
 
         {error && (

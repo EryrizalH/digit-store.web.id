@@ -34,7 +34,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       case 'herosms':
         return (
           <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1">
-            <Smartphone className="w-3.5 h-3.5" /> HeroSMS OTP
+            <Smartphone className="w-3.5 h-3.5" /> SMS OTP
           </span>
         );
       default:
@@ -102,7 +102,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div>
           <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Harga</span>
           <span className="text-base font-extrabold text-white">
-            {product.type === 'herosms' ? 'Konfigurator' : formatPrice(product.price)}
+            {product.type === 'herosms' ? 'Cek Harga' : formatPrice(product.price)}
           </span>
         </div>
 
@@ -111,15 +111,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             to={targetUrl}
             className="min-h-[44px] min-w-0 flex-1 rounded-xl bg-slate-800 px-3 text-center text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 focus-visible:ring-2 focus-visible:ring-indigo-500 sm:flex-none"
           >
-            {product.type === 'herosms' ? 'Konfigurasi' : 'Detail'}
+            {product.type === 'herosms' ? 'Pilih' : 'Detail'}
           </Link>
 
           <button
             onClick={handleAction}
             disabled={product.type === 'code' && (product.stock_count || 0) <= 0}
             className="w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center shrink-0 focus-visible:ring-2 focus-visible:ring-indigo-500"
-            title={product.type === 'herosms' ? 'Buka Konfigurator OTP' : 'Tambah ke Keranjang'}
-            aria-label={product.type === 'herosms' ? 'Buka Konfigurator OTP' : 'Tambah ke Keranjang'}
+            title={product.type === 'herosms' ? 'Aktivasi SMS OTP' : 'Tambah ke Keranjang'}
+            aria-label={product.type === 'herosms' ? 'Aktivasi SMS OTP' : 'Tambah ke Keranjang'}
           >
             {product.type === 'herosms' ? <SlidersHorizontal className="w-5 h-5" /> : <ShoppingCart className="w-5 h-5" />}
           </button>

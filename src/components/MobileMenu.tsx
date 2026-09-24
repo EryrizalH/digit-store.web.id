@@ -81,7 +81,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           {user && (
             <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
               <p className="truncate text-sm font-bold text-white">{user.email}</p>
-              <p className="mt-1 text-[11px] text-slate-400">{user.is_guest ? 'Sesi tamu' : `Akun ${user.role}`}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{user.is_guest ? 'Akun tamu' : user.role === 'admin' ? 'Akun admin' : 'Akun terdaftar'}</p>
               {referralCode && <p className="mt-1 text-[10px] text-indigo-300">Referral: {referralCode}</p>}
               {creditBalance !== null && (
                 <Link to="/topup" onClick={handleLinkClick} className="mt-3 flex min-h-[44px] items-center justify-between rounded-xl border border-emerald-800/60 bg-emerald-950/30 px-3 text-xs font-bold text-emerald-200 focus-visible:ring-2 focus-visible:ring-emerald-400">
@@ -94,7 +94,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 
           <nav aria-label="Navigasi mobile" className="space-y-1">
             <Link to="/" onClick={handleLinkClick} className={linkClass(location.pathname === '/')}><Home className="h-5 w-5 text-indigo-300" /> Katalog produk</Link>
-            <Link to="/produk/herosms-otp-configurator" onClick={handleLinkClick} className={linkClass(location.pathname === '/produk/herosms-otp-configurator')}><Smartphone className="h-5 w-5 text-purple-300" /> HeroSMS OTP</Link>
+            <Link to="/produk/herosms-otp-configurator" onClick={handleLinkClick} className={linkClass(location.pathname === '/produk/herosms-otp-configurator')}><Smartphone className="h-5 w-5 text-purple-300" /> Aktivasi SMS OTP</Link>
             <Link to="/keranjang" onClick={handleLinkClick} className={linkClass(location.pathname === '/keranjang')}><ShoppingBag className="h-5 w-5 text-indigo-300" /> Keranjang</Link>
             {user && <Link to="/pesanan" onClick={handleLinkClick} className={linkClass(location.pathname.startsWith('/pesanan'))}><KeyRound className="h-5 w-5 text-indigo-300" /> Pesanan saya</Link>}
             {user && <Link to="/topup" onClick={handleLinkClick} className={linkClass(location.pathname.startsWith('/topup'))}><Wallet className="h-5 w-5 text-emerald-300" /> Top-up kredit</Link>}

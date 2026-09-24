@@ -42,7 +42,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
 
   const handleCheckout = async () => {
     if (hasHeroSms && !agreedPolicy) {
-      setError('Wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum checkout.');
+      setError('Wajib menyetujui Kebijakan Penggunaan Layanan SMS OTP sebelum checkout.');
       return;
     }
 
@@ -102,8 +102,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
             expiresAt: fresh.expiresAt,
             quoteId: fresh.quoteId
           });
-          const formattedPrice = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(fresh.freshSellingPrice);
-          setError(`Harga rute OTP telah diperbarui menjadi ${formattedPrice}. Silakan tinjau dan klik Bayar Sekarang.`);
+          const cartItem = cart.find(i => i.serviceCode === fresh.serviceCode);
+          const serviceLabel = cartItem?.serviceName ? ` untuk ${cartItem.serviceName}` : '';
+          const formattedPrice = formatPrice(fresh.freshSellingPrice);
+          setError(`Harga layanan SMS OTP${serviceLabel} telah diperbarui menjadi ${formattedPrice}. Silakan tinjau dan klik Bayar Sekarang.`);
           return;
         }
       }
@@ -141,7 +143,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
             <h2 id="cart-drawer-title" className="text-lg font-extrabold text-white flex items-center gap-2">
               <span>Keranjang Belanja</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
-                {cart.length} item
+                {cart.length} produk
               </span>
             </h2>
             <button
@@ -218,9 +220,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                       )}
                       <button
                         onClick={() => removeFromCart(itemKey)}
-                        aria-label="Hapus item dari keranjang"
+                        aria-label="Hapus produk dari keranjang"
                         className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 ml-1 focus-visible:ring-2 focus-visible:ring-indigo-500"
-                        title="Hapus item"
+                        title="Hapus produk"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -258,7 +260,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                         onChange={(e) => setAgreedPolicy(e.target.checked)}
                         className="mt-0.5 rounded border-purple-800 bg-purple-900 text-indigo-500"
                       />
-                      <span>Saya menyetujui syarat & kebijakan penggunaan HeroSMS.</span>
+                      <span>Saya menyetujui syarat & ketentuan layanan SMS OTP.</span>
                     </label>
                   </div>
                 )}
@@ -290,7 +292,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
                       className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                     />
                   </div>
-                  <p className="mt-1 text-[10px] text-slate-500">Email baru dibuatkan sesi tamu selama 24 jam. Email akun lama perlu login.</p>
+                  <p className="mt-1 text-[10px] text-slate-500">Checkout langsung tanpa ribet. Akun terdaftar silakan masuk.</p>
                 </div>
               )}
 
@@ -300,7 +302,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
               </div>
 
               <div>
-                <label htmlFor="cart-referral-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Referral code (opsional)</label>
+                <label htmlFor="cart-referral-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Kode referral (opsional)</label>
                 <input id="cart-referral-code" type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} placeholder="REF-AB12CD34" className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-mono text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
                 <p className="mt-1 text-[10px] text-slate-500">Potongan referral 5%, maksimal Rp 10.000.</p>
               </div>

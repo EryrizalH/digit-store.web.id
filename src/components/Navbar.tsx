@@ -142,9 +142,9 @@ export const Navbar: React.FC = () => {
 
             <Link to="/" className={navLinkClass(location.pathname === '/')}>Katalog</Link>
 
-            <Link to="/produk/herosms-otp-configurator" aria-label="HeroSMS OTP" title="HeroSMS OTP" className={navLinkClass(location.pathname === '/produk/herosms-otp-configurator', 'purple')}>
+            <Link to="/produk/herosms-otp-configurator" aria-label="Aktivasi SMS OTP" title="Aktivasi SMS OTP" className={navLinkClass(location.pathname === '/produk/herosms-otp-configurator', 'purple')}>
               <Smartphone className="h-4 w-4 text-purple-400" />
-              HeroSMS OTP
+              Aktivasi SMS OTP
             </Link>
 
             {user && <Link to="/pesanan" aria-label="Pesanan Saya" title="Pesanan Saya" className={navLinkClass(location.pathname.startsWith('/pesanan'))}><KeyRound className="h-4 w-4 text-indigo-400" /> Pesanan Saya</Link>}
@@ -173,7 +173,7 @@ export const Navbar: React.FC = () => {
             </Link>
 
             {user ? <div className="flex shrink-0 items-center gap-1.5">
-              <div className="hidden flex-col text-right lg:flex"><span className="max-w-[120px] truncate text-xs font-semibold text-slate-200">{user.email}</span><span className="text-[10px] capitalize text-slate-400">{user.is_guest ? 'tamu' : user.role}</span>{referralCode && <span className="text-[9px] text-indigo-300">Referral: {referralCode}</span>}</div>
+              <div className="hidden flex-col text-right lg:flex"><span className="max-w-[120px] truncate text-xs font-semibold text-slate-200">{user.email}</span><span className="text-[10px] capitalize text-slate-400">{user.is_guest ? 'tamu' : user.role === 'admin' ? 'admin' : 'terdaftar'}</span>{referralCode && <span className="text-[9px] text-indigo-300">Referral: {referralCode}</span>}</div>
               {user.is_guest && <button type="button" onClick={() => openAuthModal('register')} className="hidden min-h-[40px] rounded-xl border border-amber-700/60 px-2.5 text-[10px] font-bold text-amber-300 hover:bg-amber-950/40 lg:inline-flex">Amankan akun</button>}
               <button type="button" onClick={logout} title="Keluar" aria-label="Keluar" className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900 text-slate-400 transition-all hover:border-rose-500/30 hover:text-rose-400 focus-visible:ring-2 focus-visible:ring-rose-500 lg:flex"><LogOut className="h-5 w-5" /></button>
             </div> : <Link to="/masuk" aria-label="Masuk" title="Masuk" className="hidden min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white transition-all hover:bg-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500 lg:flex"><User className="h-4 w-4" /> Masuk</Link>}

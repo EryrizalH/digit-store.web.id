@@ -23,15 +23,45 @@ Digit Store is a digital storefront delivered as a React SPA and a Hono API on C
 
 ## Skills and workflows
 
-For Cloudflare code or configuration, read these verified skills before editing:
+Use the following routing so each task loads only the guidance it needs. The Cloudflare skills are trusted user-scope skills and are intentionally referenced in place rather than duplicated into this repository:
+
+### Cloudflare and backend
+
+For Worker, Hono, D1, R2, KV, Wrangler configuration, or platform operations, read these before editing:
 
 1. `/home/eryrizal/.agents/skills/cloudflare/SKILL.md`
 2. `/home/eryrizal/.agents/skills/wrangler/SKILL.md`
 3. `/home/eryrizal/.agents/skills/workers-best-practices/SKILL.md`
-4. `/home/eryrizal/.codex/skills/cloudflare-deploy/SKILL.md` for deploy/hosting/provisioning requests
-5. `/home/eryrizal/.codex/skills/security-best-practices/SKILL.md` for an explicitly requested security review or secure-by-default change
 
-Use `.github/agents/cloudflare-stack-operator.agent.md` for Cloudflare operations and deployment planning. For storefront UI work, read `.agents/skills/ui-styling/SKILL.md` and consult `ui-ux-pro-max` when the task needs visual direction. Before UI work, follow the repository's antislop guidance and settle the requested usage mode first.
+Also load `/home/eryrizal/.codex/skills/cloudflare-deploy/SKILL.md` only for deploy, hosting, or provisioning requests. Load `/home/eryrizal/.codex/skills/security-best-practices/SKILL.md` only when the user explicitly requests a security review or secure-by-default change. Use `.github/agents/cloudflare-stack-operator.agent.md` for Cloudflare operations and deployment planning.
+
+### Storefront UI and design
+
+For React, Vite, Tailwind, accessibility, responsive layout, or visual work, load:
+
+- `.agents/skills/ui-styling/SKILL.md` for implementation and component styling.
+- `.agents/skills/ui-ux-pro-max/SKILL.md` only when visual direction, UX research, or stack-specific design guidance is needed.
+- `.agents/skills/brand/SKILL.md` when changing brand voice or visual identity.
+- `.agents/skills/design-system/SKILL.md` when creating or changing shared design tokens/components.
+- `.agents/skills/banner-design/SKILL.md` only for requested banner/creative assets.
+
+### Antislop UI guardrails
+
+The antislop package is installed in this workspace so the rules are portable and versioned with the project. For UI or copy work, read the core and the relevant supplements together:
+
+- `.agents/skills/antislop/SKILL.md` (core filter and delivery gate)
+- `.agents/skills/antislop-ui/SKILL.md` (visual/UI decisions)
+- `.agents/skills/antislop-copywriting/SKILL.md` (user-facing copy)
+- `.agents/skills/antislop-human/SKILL.md` (contrast, keyboard, focus, and UI states)
+- `.agents/skills/antislop-layoutmobile/SKILL.md` (responsive/mobile behavior)
+- `.agents/skills/antislop-code/SKILL.md` (only when editing code comments)
+
+The selected antislop usage mode for this project is **DURING**: apply the rules during planning and implementation, not as a post-hoc audit. Before new UI work, read `DESIGN.md` if present or resolve the design direction explicitly; do not silently invent a visual direction.
+
+<!-- antislop:start -->
+## antislop
+For UI, copy, accessibility, mobile layout, or code-comment work, read `.agents/skills/antislop/SKILL.md` and then the relevant supplement above. Ask at the start of UI work whether antislop applies during the work or as a post-work audit; this project default is DURING.
+<!-- antislop:end -->
 
 ## Local workflow
 

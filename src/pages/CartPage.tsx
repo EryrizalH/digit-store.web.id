@@ -40,7 +40,7 @@ export const CartPage: React.FC = () => {
 
   const handleCheckout = async () => {
     if (hasHeroSms && !agreedPolicy) {
-      setError('Anda wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum melakukan checkout.');
+      setError('Anda wajib menyetujui Kebijakan Penggunaan Layanan SMS OTP sebelum melakukan checkout.');
       return;
     }
 
@@ -94,16 +94,19 @@ export const CartPage: React.FC = () => {
       if (res.status === 409 || data.code === 'OTP_PRICE_CHANGED') {
         const fresh = data.freshQuote;
         if (fresh && fresh.serviceCode && fresh.countryCode && fresh.freshSellingPrice) {
-          const pId = fresh.productId || cart.find(i => i.serviceCode === fresh.serviceCode)?.product.id || '';
+          const cartItem = cart.find(i => i.serviceCode === fresh.serviceCode);
+          const pId = fresh.productId || cartItem?.product.id || '';
           updateOtpQuote(pId, fresh.serviceCode, fresh.countryCode, {
             price: fresh.freshSellingPrice,
             expiresAt: fresh.expiresAt,
             quoteId: fresh.quoteId
           });
           const formattedPrice = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(fresh.freshSellingPrice);
-          setError(`Harga OTP untuk rute ${fresh.serviceCode} (${fresh.countryCode}) telah diperbarui menjadi ${formattedPrice}. Silakan tekan Lanjut ke Pembayaran lagi untuk mengonfirmasi.`);
+          const serviceLabel = cartItem?.serviceName || fresh.serviceCode;
+          const countryLabel = cartItem?.countryName || (fresh.countryCode === '0' ? 'Russia' : fresh.countryCode);
+          setError(`Harga layanan SMS OTP untuk ${serviceLabel} (${countryLabel}) telah diperbarui menjadi ${formattedPrice}. Silakan tekan Lanjut ke Pembayaran lagi untuk konfirmasi.`);
         } else {
-          setError(data.error || 'Harga layanan OTP telah diperbarui. Silakan tekan Lanjut ke Pembayaran lagi untuk konfirmasi.');
+          setError(data.error || 'Harga layanan SMS OTP telah diperbarui. Silakan tekan Lanjut ke Pembayaran lagi untuk konfirmasi.');
         }
         return;
       }
@@ -134,7 +137,7 @@ export const CartPage: React.FC = () => {
           <h1 className="text-xl sm:text-2xl font-extrabold text-white flex items-center gap-2">
             <span>Keranjang Belanja</span>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              {cart.length} item
+              {cart.length} produk
             </span>
           </h1>
         </div>
@@ -209,7 +212,7 @@ export const CartPage: React.FC = () => {
                         <button
                           onClick={() => updateQuantity(itemKey, item.quantity - 1)}
                           className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 flex items-center justify-center border border-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
-                          aria-label="Decrease quantity"
+                          aria-label="Kurangi jumlah"
                         >
                           <Minus className="w-4 h-4" />
                         </button>
@@ -219,7 +222,7 @@ export const CartPage: React.FC = () => {
                         <button
                           onClick={() => updateQuantity(itemKey, item.quantity + 1)}
                           className="w-10 h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 flex items-center justify-center border border-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500"
-                          aria-label="Increase quantity"
+                          aria-label="Tambah jumlah"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
@@ -228,8 +231,8 @@ export const CartPage: React.FC = () => {
                     <button
                       onClick={() => removeFromCart(itemKey)}
                       className="w-10 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 flex items-center justify-center ml-1 border border-rose-500/20 focus-visible:ring-2 focus-visible:ring-rose-500"
-                      aria-label="Remove item"
-                      title="Hapus Rute"
+                      aria-label="Hapus produk"
+                      title="Hapus Produk"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -315,7 +318,7 @@ export const CartPage: React.FC = () => {
                     className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 pl-10 pr-3 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                   />
                 </div>
-                <p className="mt-1 text-[10px] text-slate-500">Email baru dibuatkan sesi tamu 24 jam. Email akun lama perlu login.</p>
+                <p className="mt-1 text-[10px] text-slate-500">Checkout langsung tanpa ribet. Akun terdaftar silakan masuk.</p>
               </div>
             )}
 
@@ -325,7 +328,7 @@ export const CartPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="cart-page-referral-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Referral code (opsional)</label>
+              <label htmlFor="cart-page-referral-code" className="text-xs font-semibold text-slate-300 block mb-1.5">Kode referral (opsional)</label>
               <input id="cart-page-referral-code" type="text" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} placeholder="REF-AB12CD34" className="w-full min-h-[44px] rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm font-mono text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
               <p className="mt-1 text-[10px] text-slate-500">Potongan referral 5%, maksimal Rp 10.000.</p>
             </div>
@@ -339,7 +342,7 @@ export const CartPage: React.FC = () => {
                     onChange={(e) => setAgreedPolicy(e.target.checked)}
                     className="mt-0.5 w-4 h-4 rounded border-purple-800 bg-purple-900 text-indigo-500 focus:ring-2 focus:ring-indigo-500"
                   />
-                  <span>Saya membaca & menyetujui syarat kebijakan penggunaan HeroSMS.</span>
+                  <span>Saya membaca & menyetujui syarat penggunaan layanan SMS OTP.</span>
                 </label>
               </div>
             )}

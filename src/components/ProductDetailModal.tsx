@@ -24,7 +24,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
 
   const handleAddToCart = () => {
     if (product.type === 'herosms' && !policyAgreed) {
-      alert('Anda wajib menyetujui kebijakan penggunaan HeroSMS sebelum melanjutkan.');
+      alert('Anda wajib menyetujui kebijakan penggunaan layanan SMS OTP sebelum melanjutkan.');
       return;
     }
     addToCart(product);
@@ -68,7 +68,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
 
           <div>
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-              {product.type === 'file' ? 'Digital Download' : product.type === 'code' ? 'Lisensi Voucher' : 'Aktivasi HeroSMS'}
+              {product.type === 'file' ? 'Download Instan' : product.type === 'code' ? 'Lisensi Otomatis' : 'Aktivasi SMS OTP'}
             </span>
             <h2 id="modal-product-title" className="text-xl font-extrabold text-white">{product.name}</h2>
           </div>
@@ -88,7 +88,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
               <span className="font-semibold text-purple-300">Syarat & Kebijakan Aktivasi SMS:</span>
             </div>
             <p className="text-purple-300/80 mb-3 leading-relaxed">
-              Layanan ini disediakan hanya untuk keperluan legal. Pembeli wajib menyetujui bahwa penggunaan nomor OTP SMS tidak melanggar ketentuan hukum atau syarat layanan pihak ketiga.
+              Layanan ini disediakan hanya untuk keperluan legal. Pembeli wajib menyetujui bahwa penggunaan nomor SMS OTP tidak melanggar ketentuan hukum atau syarat layanan pihak ketiga.
             </p>
             <label className="flex items-center gap-2.5 cursor-pointer font-medium text-purple-200 hover:text-white transition-colors min-h-[44px]">
               <input
@@ -116,7 +116,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
             className="px-6 py-3 min-h-[44px] rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <ShoppingBag className="w-5 h-5" />
-            <span>Beli / Tambah Cart</span>
+            <span>Tambah ke Keranjang</span>
           </button>
         </div>
       </div>

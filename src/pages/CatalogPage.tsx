@@ -61,7 +61,7 @@ export const CatalogPage: React.FC = () => {
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await fetch(url, { signal });
-      if (!res.ok) throw new Error('Gagal memuat produk dari server.');
+      if (!res.ok) throw new Error('Gagal memuat produk. Silakan coba lagi.');
 
       const data = (await res.json()) as any;
       const rawProducts: Product[] = data.products || [];
@@ -156,10 +156,10 @@ export const CatalogPage: React.FC = () => {
       <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 sm:p-10">
         <div className="relative z-10 max-w-2xl">
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight mb-3">
-            Akses Instan <span className="text-indigo-300">File, Lisensi & OTP SMS</span>
+            Akses Instan <span className="text-indigo-300">File, Lisensi & SMS OTP</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-6">
-            Dapatkan source code & software dari Cloudflare R2 Storage, kode lisensi voucher otomatis, serta nomor penerima OTP HeroSMS langsung dari dashboard Anda.
+            Dapatkan source code & software siap pakai, kode lisensi resmi instan, serta nomor verifikasi SMS OTP langsung dari dashboard Anda.
           </p>
 
           {/* Benefit Pills */}
@@ -169,8 +169,8 @@ export const CatalogPage: React.FC = () => {
                 <Download className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-white block">File Digital Privat</span>
-                <span className="text-[10px] text-slate-400">Unduh Aman dari R2</span>
+                <span className="text-xs font-bold text-white block">Download Instan & Aman</span>
+                <span className="text-[10px] text-slate-400">Akses File Cepat</span>
               </div>
             </div>
 
@@ -179,8 +179,8 @@ export const CatalogPage: React.FC = () => {
                 <Key className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-white block">Lisensi Atomik</span>
-                <span className="text-[10px] text-slate-400">Kode Kirim Otomatis</span>
+                <span className="text-xs font-bold text-white block">Lisensi Otomatis</span>
+                <span className="text-[10px] text-slate-400">Kode Langsung Aktif</span>
               </div>
             </div>
 
@@ -189,8 +189,8 @@ export const CatalogPage: React.FC = () => {
                 <Smartphone className="w-4 h-4" />
               </div>
               <div>
-                <span className="text-xs font-bold text-white block">HeroSMS Live OTP</span>
-                <span className="text-[10px] text-slate-400">Aktivasi Langsung</span>
+                <span className="text-xs font-bold text-white block">Verifikasi SMS Instan</span>
+                <span className="text-[10px] text-slate-400">Aktivasi SMS OTP</span>
               </div>
             </div>
           </div>
@@ -265,7 +265,7 @@ export const CatalogPage: React.FC = () => {
               <option value="">Semua tipe</option>
               <option value="file">File digital</option>
               <option value="code">Kode / voucher</option>
-              <option value="herosms">OTP SMS</option>
+              <option value="herosms">SMS OTP</option>
             </select>
           </label>
 

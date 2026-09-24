@@ -378,7 +378,7 @@ export const TopupPage: React.FC = () => {
                 >
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-slate-200 truncate">
-                      {txn.type === 'topup' ? 'Topup' : txn.type === 'debit' ? 'Pembayaran' : 'Refund'}
+                      {txn.type === 'topup' ? 'Topup' : txn.type === 'debit' ? 'Pembayaran' : 'Pengembalian Dana'}
                     </p>
                     <p className="text-[10px] text-slate-500 truncate">
                       {txn.description || txn.id}

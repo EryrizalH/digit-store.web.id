@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       closeAuthModal();
       return { success: true };
     }
-    return { success: false, error: data.error || 'Login failed' };
+    return { success: false, error: data.error || 'Gagal masuk ke akun' };
   };
 
   const register = async (email: string, pass: string) => {
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       closeAuthModal();
       return { success: true };
     }
-    return { success: false, error: data.error || 'Registration failed' };
+    return { success: false, error: data.error || 'Gagal mendaftar akun' };
   };
 
   const guestCheckout = async (email: string) => {

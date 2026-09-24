@@ -96,7 +96,7 @@ otpRouter.get('/services', async (c) => {
     if (err instanceof HeroSmsError && err.code === 'CONFIG_ERROR') {
       return c.json({ error: 'HeroSMS API key is not configured.', code: 'HEROSMS_NOT_CONFIGURED' }, 503);
     }
-    return c.json({ error: 'Gagal mengambil daftar layanan dari provider HeroSMS' }, 502);
+    return c.json({ error: 'Gagal mengambil daftar layanan aktivasi SMS' }, 502);
   }
 });
 
@@ -159,7 +159,7 @@ otpRouter.get('/countries', async (c) => {
     if (err instanceof HeroSmsError && err.code === 'CONFIG_ERROR') {
       return c.json({ error: 'HeroSMS API key is not configured.', code: 'HEROSMS_NOT_CONFIGURED' }, 503);
     }
-    return c.json({ error: 'Gagal mengambil daftar negara dari provider HeroSMS' }, 502);
+    return c.json({ error: 'Gagal mengambil daftar negara layanan aktivasi SMS' }, 502);
   }
 });
 
@@ -205,7 +205,7 @@ otpRouter.get('/quote', async (c) => {
       if (err instanceof HeroSmsError && err.code === 'CONFIG_ERROR') {
         return c.json({ error: 'HeroSMS API key is not configured.', code: 'HEROSMS_NOT_CONFIGURED' }, 503);
       }
-      return c.json({ error: 'Gagal mengambil harga provider HeroSMS' }, 502);
+      return c.json({ error: 'Gagal memeriksa harga layanan aktivasi SMS' }, 502);
     }
   }
 

@@ -25,21 +25,21 @@ export const ArtworkImage: React.FC<ArtworkImageProps> = ({
         return (
           <div className="w-full h-full bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 text-blue-400">
             <Download className="w-8 h-8 mb-2 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-300/80">Digital File</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-300/80">File Digital</span>
           </div>
         );
       case 'code':
         return (
           <div className="w-full h-full bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 flex flex-col items-center justify-center p-4 text-emerald-400">
             <Key className="w-8 h-8 mb-2 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300/80">License Code</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300/80">Kode Lisensi</span>
           </div>
         );
       case 'herosms':
         return (
           <div className="w-full h-full bg-gradient-to-br from-purple-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 text-purple-400">
             <Smartphone className="w-8 h-8 mb-2 animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300/80">HeroSMS OTP</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300/80">SMS OTP</span>
           </div>
         );
       default:

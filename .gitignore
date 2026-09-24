@@ -21,6 +21,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local agent state & Python caches
+.agents/tasks/
+.zcode/plans/
+__pycache__/
+*.py[cod]
+
 # Environment variables & local secrets
 .env
 .dev.vars

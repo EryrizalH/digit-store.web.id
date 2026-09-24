@@ -92,6 +92,14 @@ export const OrdersView: React.FC = () => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
   };
 
+  const formatFulfilmentError = (err?: string | null) => {
+    if (!err) return 'Kendala pemrosesan';
+    if (/stock/i.test(err)) return 'Stok sedang habis';
+    if (/price/i.test(err)) return 'Perubahan harga layanan';
+    if (/provider|herosms|network|connect|config/i.test(err)) return 'Kendala sistem aktivasi';
+    return 'Kendala teknis';
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto py-12 px-4 text-center text-slate-400">
@@ -129,7 +137,7 @@ export const OrdersView: React.FC = () => {
           <Key className="w-12 h-12 text-slate-600 mx-auto mb-4" />
           <h3 className="text-lg font-extrabold text-white mb-2">Belum Ada Pesanan</h3>
           <p className="text-xs text-slate-400">
-            Anda belum pernah membeli produk file, lisensi, atau aktivasi SMS.
+            Anda belum pernah membeli produk file, lisensi, atau aktivasi SMS OTP.
           </p>
         </div>
       </div>
@@ -164,7 +172,7 @@ export const OrdersView: React.FC = () => {
                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
                 }`}>
-                  {ord.payment_status}
+                  {ord.payment_status === 'paid' ? 'Lunas' : ord.payment_status === 'refunded' ? 'Dikembalikan' : ord.payment_status === 'failed' ? 'Gagal' : 'Menunggu Bayar'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -221,7 +229,7 @@ export const OrdersView: React.FC = () => {
 
               {/* Order Items List */}
               <div>
-                <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Item Pesanan</h4>
+                <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wider mb-3">Daftar Produk Pesanan</h4>
                 <div className="space-y-3">
                   {orderDetail.items.map((item) => (
                     <div key={item.id} className="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-2">
@@ -230,10 +238,10 @@ export const OrdersView: React.FC = () => {
                           <span className="font-bold text-white text-sm block">{item.product_name}</span>
                           {item.product_type === 'herosms' && (item.service_code || item.service_name) && (
                             <span className="text-xs font-semibold text-purple-300 block">
-                              Rute: {item.service_name || item.service_code} ({item.country_name || item.country_code})
+                              Aplikasi: {item.service_name || item.service_code} ({item.country_name || item.country_code})
                             </span>
                           )}
-                          <span className="text-[10px] text-slate-400 uppercase">Tipe: {item.product_type}</span>
+                          <span className="text-[10px] text-slate-400 uppercase">Tipe: {item.product_type === 'file' ? 'File Digital' : item.product_type === 'code' ? 'Lisensi' : 'SMS OTP'}</span>
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-slate-300 font-bold">{item.quantity}x</span>
@@ -243,14 +251,14 @@ export const OrdersView: React.FC = () => {
 
                       {/* Per-item fulfilment status */}
                       <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                        <span className="text-slate-400">Status Pemenuhan Item:</span>
+                        <span className="text-slate-400">Status Produk:</span>
                         {item.fulfilment_status === 'fulfilled' ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Terpenuhi
                           </span>
                         ) : item.fulfilment_status === 'failed' ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1" title={item.fulfilment_error || 'Gagal Terhubung Provider'}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Refund Manual Diperlukan ({item.fulfilment_error || 'Provider Error'})
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1" title={formatFulfilmentError(item.fulfilment_error)}>
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Bantuan Diperlukan ({formatFulfilmentError(item.fulfilment_error)})
                           </span>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
@@ -270,12 +278,12 @@ export const OrdersView: React.FC = () => {
                   {orderDetail.fileEntitlements.length > 0 && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                        <Download className="w-4 h-4" /> Unduhan File Privat (R2 Bucket)
+                        <Download className="w-4 h-4" /> Download Instan & Aman
                       </h4>
                       {orderDetail.fileEntitlements.map((fe) => (
                         <div key={fe.id} className="p-4 bg-blue-950/30 border border-blue-800/40 rounded-2xl flex items-center justify-between gap-3">
                           <div>
-                            <span className="text-xs font-semibold text-slate-200 block">Link Akses Privat Digital Store</span>
+                            <span className="text-xs font-semibold text-slate-200 block">Akses File Cepat</span>
                             <span className="text-[10px] text-slate-400">Berlaku sampai {new Date(fe.expires_at * 1000).toLocaleDateString()}</span>
                           </div>
                           <a
@@ -332,7 +340,7 @@ export const OrdersView: React.FC = () => {
                   {orderDetail.smsActivations.length > 0 && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-bold text-purple-400 flex items-center gap-2">
-                        <Smartphone className="w-4 h-4" /> Aktivasi Nomor HeroSMS OTP
+                        <Smartphone className="w-4 h-4" /> Aktivasi SMS OTP Langsung
                       </h4>
                       {orderDetail.smsActivations.map((sms) => (
                         <SmsActivationViewer key={sms.id} activationId={sms.id} />

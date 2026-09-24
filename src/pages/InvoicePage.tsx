@@ -71,11 +71,19 @@ export const InvoicePage: React.FC = () => {
           <div className="text-right text-xs">
             <p className="font-mono font-bold text-white">{data.order.id}</p>
             <p className="mt-1 text-slate-400">{new Date(data.order.created_at).toLocaleString('id-ID')}</p>
-            <p className="mt-2 inline-flex rounded-full border border-slate-700 px-2.5 py-1 font-bold uppercase text-slate-200">{data.order.payment_status}</p>
+            <p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${
+              data.order.payment_status === 'paid'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : data.order.payment_status === 'refunded'
+                  ? 'bg-rose-500/10 text-rose-300 border border-rose-500/20'
+                  : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+            }`}>
+              {data.order.payment_status === 'paid' ? 'Lunas' : data.order.payment_status === 'refunded' ? 'Dikembalikan' : data.order.payment_status === 'failed' ? 'Gagal' : 'Menunggu Bayar'}
+            </p>
           </div>
         </header>
 
-        <div className="space-y-3 sm:hidden" aria-label="Daftar item invoice">
+        <div className="space-y-3 sm:hidden" aria-label="Daftar produk invoice">
           {data.items.map((item) => (
             <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
               <div className="flex items-start justify-between gap-3">
@@ -109,7 +117,7 @@ export const InvoicePage: React.FC = () => {
         </div>
 
         <footer className="border-t border-slate-800 pt-5 text-xs leading-relaxed text-slate-500">
-          Simpan invoice ini sebagai referensi saat menghubungi support. Status fulfillment dan item digital tersedia di halaman pesanan.
+          Simpan invoice ini sebagai referensi saat menghubungi bantuan. Status pesanan dan akses produk digital tersedia di halaman pesanan.
         </footer>
       </article>
     </main>

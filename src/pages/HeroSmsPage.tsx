@@ -38,7 +38,7 @@ export const HeroSmsPage: React.FC = () => {
     try {
       const res = await fetch('/api/products/by-slug/herosms-otp-configurator');
       if (!res.ok) {
-        throw new Error('Gagal mengambil data layanan HeroSMS dari server.');
+        throw new Error('Gagal memuat data layanan aktivasi SMS.');
       }
       const data = (await res.json()) as any;
       setProduct(data.product || null);
@@ -117,7 +117,7 @@ export const HeroSmsPage: React.FC = () => {
       if (reqId !== quoteReqId.current) return;
 
       if (!res.ok) {
-        setQuoteError(data.error || 'Gagal mengambil kuotasi harga dari provider HeroSMS.');
+        setQuoteError(data.error || 'Gagal memeriksa harga aktivasi SMS saat ini.');
         return;
       }
       setQuote(data.quote);
@@ -159,11 +159,11 @@ export const HeroSmsPage: React.FC = () => {
   const handleAddToCart = () => {
     if (!product) return;
     if (!policyAgreed) {
-      alert('Anda wajib menyetujui Kebijakan Penggunaan HeroSMS sebelum menambahkan ke keranjang.');
+      alert('Anda wajib menyetujui Kebijakan Penggunaan Layanan SMS OTP sebelum menambahkan ke keranjang.');
       return;
     }
     if (!quote || quoteError || timeLeft === 0) {
-      alert('Silakan dapatkan kuotasi harga aktif terlebih dahulu.');
+      alert('Silakan cek harga aktif terlebih dahulu.');
       return;
     }
 
@@ -196,7 +196,7 @@ export const HeroSmsPage: React.FC = () => {
         <div className="glass-panel p-8 rounded-3xl border border-slate-800 space-y-4">
           <AlertCircle className="w-12 h-12 text-rose-400 mx-auto" />
           <h2 className="text-xl font-extrabold text-white">Layanan tidak dapat dimuat</h2>
-          <p className="text-xs text-slate-400">{error || 'Konfigurator HeroSMS OTP sementara tidak tersedia.'}</p>
+          <p className="text-xs text-slate-400">{error || 'Layanan aktivasi SMS OTP sementara tidak tersedia.'}</p>
           <Link
             to="/"
             className="inline-flex items-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md"
@@ -235,7 +235,7 @@ export const HeroSmsPage: React.FC = () => {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 text-xs font-semibold rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 inline-flex items-center gap-1.5">
-              <Smartphone className="w-4 h-4" /> Konfigurator HeroSMS OTP
+              <Smartphone className="w-4 h-4" /> Aktivasi SMS OTP
             </span>
           </div>
 
@@ -248,20 +248,20 @@ export const HeroSmsPage: React.FC = () => {
         <div className="bg-slate-900/80 rounded-2xl p-5 border border-slate-800/80 space-y-2">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Deskripsi & Informasi Produk</h3>
           <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">
-            {product.description || 'Konfigurasi rute SMS OTP secara cepat & real-time.'}
+            {product.description || 'Aktivasi nomor SMS OTP instan dan otomatis untuk berbagai aplikasi.'}
           </p>
         </div>
 
-        {/* HeroSMS Live OTP Configurator */}
+        {/* SMS OTP Activation Configurator */}
         <div className="space-y-5 rounded-2xl border border-purple-500/30 bg-slate-900/90 p-4 sm:p-5">
           <h3 className="text-sm font-extrabold text-purple-300 flex items-center gap-2">
-            <Smartphone className="w-4 h-4 text-purple-400" /> Konfigurasi Rute Layanan & Negara OTP
+            <Smartphone className="w-4 h-4 text-purple-400" /> Pilih Aplikasi & Negara Nomor OTP
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Service Selector */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-300 block">Pilih Layanan / Aplikasi:</label>
+              <label className="text-xs font-bold text-slate-300 block">Pilih Aplikasi / Layanan:</label>
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input
@@ -291,7 +291,7 @@ export const HeroSmsPage: React.FC = () => {
                 }}
                 className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500 focus-visible:ring-2 focus-visible:ring-purple-400"
               >
-                <option value="">-- Pilih Layanan / Aplikasi --</option>
+                <option value="">-- Pilih Aplikasi / Layanan --</option>
                 {filteredServices.map((s) => (
                   <option key={s.code} value={s.code}>
                     {s.name} ({s.code})
@@ -321,7 +321,7 @@ export const HeroSmsPage: React.FC = () => {
                 className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:outline-none focus:border-purple-500 focus-visible:ring-2 focus-visible:ring-purple-400 disabled:opacity-50"
               >
                 {!selectedService ? (
-                  <option value="">-- Pilih Layanan Terlebih Dahulu --</option>
+                  <option value="">-- Pilih Aplikasi Terlebih Dahulu --</option>
                 ) : countriesLoading ? (
                   <option value="">Memuat daftar negara...</option>
                 ) : countries.length === 0 ? (
@@ -331,7 +331,7 @@ export const HeroSmsPage: React.FC = () => {
                     <option value="">-- Pilih Negara Nomor --</option>
                     {countries.map((c) => (
                       <option key={c.id} value={String(c.id)}>
-                        {c.eng} (ID: {c.id})
+                        {c.eng}
                       </option>
                     ))}
                   </>
@@ -343,7 +343,7 @@ export const HeroSmsPage: React.FC = () => {
           {/* Live Quote Box */}
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-slate-400 font-medium">Kuotasi Harga Real-time (IDR):</span>
+              <span className="text-xs text-slate-400 font-medium">Cek Harga Otomatis (IDR):</span>
               <button
                 onClick={() => {
                   if (selectedService && selectedCountry) {
@@ -352,14 +352,14 @@ export const HeroSmsPage: React.FC = () => {
                 }}
                 disabled={!selectedService || !selectedCountry || quoteLoading}
                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-xs flex items-center gap-1"
-                title="Perbarui Kuotasi"
+                title="Cek Ulang Harga"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${quoteLoading ? 'animate-spin' : ''}`} /> Refresh
+                <RefreshCw className={`w-3.5 h-3.5 ${quoteLoading ? 'animate-spin' : ''}`} /> Cek Ulang
               </button>
             </div>
 
             {quoteLoading ? (
-              <div className="text-xs text-purple-400 animate-pulse font-semibold">Mengambil harga terbaru dari HeroSMS...</div>
+              <div className="text-xs text-purple-400 animate-pulse font-semibold">Memeriksa harga terbaru...</div>
             ) : quoteError ? (
               <div className="p-3 bg-rose-950/50 border border-rose-800/80 rounded-xl text-xs text-rose-300 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
@@ -379,18 +379,18 @@ export const HeroSmsPage: React.FC = () => {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-900 pt-2 text-[11px] text-slate-400">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    Masa Berlaku Kuotasi: <strong className={timeLeft < 15 ? 'text-rose-400' : 'text-amber-300'}>{timeLeft} detik</strong>
+                    Harga Berlaku: <strong className={timeLeft < 15 ? 'text-rose-400' : 'text-amber-300'}>{timeLeft} detik</strong>
                   </span>
-                  <span>Rute: {quote.serviceName} ({quote.countryName})</span>
+                  <span>Aplikasi: {quote.serviceName} ({quote.countryName})</span>
                 </div>
               </div>
             ) : (
               <div className="text-xs text-slate-500 italic">
                 {!selectedService
-                  ? 'Silakan pilih layanan dan negara terlebih dahulu untuk melihat kuotasi harga.'
+                  ? 'Silakan pilih aplikasi dan negara terlebih dahulu untuk melihat harga.'
                   : !selectedCountry
-                  ? 'Silakan pilih negara nomor untuk melihat kuotasi harga.'
-                  : 'Memuat kuotasi...'}
+                  ? 'Silakan pilih negara nomor untuk melihat harga.'
+                  : 'Memeriksa harga...'}
               </div>
             )}
           </div>
@@ -402,7 +402,7 @@ export const HeroSmsPage: React.FC = () => {
               <span className="font-extrabold text-purple-300">Ketentuan & Kebijakan Aktivasi:</span>
             </div>
             <p className="text-purple-300/80 text-[11px] leading-relaxed">
-              Nomor OTP SMS bersifat sekali pakai & langsung aktif setelah pembayaran dikonfirmasi. Penggunaan nomor wajib mematuhi aturan legal.
+              Nomor SMS OTP bersifat sekali pakai & langsung aktif setelah pembayaran dikonfirmasi. Penggunaan nomor wajib mematuhi ketentuan hukum yang berlaku.
             </p>
             <label className="flex items-center gap-2.5 cursor-pointer pt-2 border-t border-purple-800/40 font-semibold text-purple-200 hover:text-white transition-colors">
               <input
@@ -433,7 +433,7 @@ export const HeroSmsPage: React.FC = () => {
           <div>
             <span className="text-[10px] text-slate-400 block uppercase font-bold">Harga Produk</span>
             <span className="text-xl sm:text-2xl font-black text-white">
-              {effectivePrice > 0 ? formatPrice(effectivePrice) : 'Pilih Rute'}
+              {effectivePrice > 0 ? formatPrice(effectivePrice) : 'Pilih Aplikasi'}
             </span>
           </div>
 

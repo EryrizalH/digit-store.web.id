@@ -71,7 +71,7 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({ open, values, activeCo
           <label className="block space-y-1.5 text-xs font-semibold text-slate-300">
             <span>Tipe produk</span>
             <select value={draft.type} onChange={(event) => update('type', event.target.value)} className="min-h-[48px] w-full rounded-xl border border-slate-700 bg-slate-900 px-3 text-sm text-white focus:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-400">
-              <option value="">Semua tipe</option><option value="file">File digital</option><option value="code">Kode / voucher</option><option value="herosms">OTP SMS</option>
+              <option value="">Semua tipe</option><option value="file">File digital</option><option value="code">Kode / voucher</option><option value="herosms">SMS OTP</option>
             </select>
           </label>
 

@@ -61,7 +61,7 @@ export const AppContent: React.FC = () => {
           <span>© 2026 DigitStore - Digital Storefront</span>
           <Link to="/bantuan" className="text-indigo-300 hover:text-white">Bantuan & kebijakan</Link>
           <span className="flex items-center gap-2 text-[11px] text-slate-400">
-            <span>D1 Database</span> • <span>R2 Storage</span> • <span>Hono + React</span>
+            <span>Download Instan</span> • <span>Lisensi Otomatis</span> • <span>Transaksi Aman</span>
           </span>
         </div>
       </footer>

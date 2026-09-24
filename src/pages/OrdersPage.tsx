@@ -150,14 +150,14 @@ export const OrdersPage: React.FC = () => {
       try {
         data = JSON.parse(resText);
       } catch {
-        throw new Error(resText || `Gagal generate ulang QRIS (HTTP ${res.status})`);
+        throw new Error(resText || `Gagal membuat ulang QRIS (HTTP ${res.status})`);
       }
-      if (!res.ok) throw new Error(data.error || 'Gagal generate ulang QRIS');
+      if (!res.ok) throw new Error(data.error || 'Gagal membuat QRIS baru');
       setQrisTimestamp(Date.now());
       setTimeLeft(300);
       void fetchOrderDetail(orderDetail.order.id, true);
     } catch (err: any) {
-      setQrisRegenerateError(err.message || 'Gagal generate QRIS baru');
+      setQrisRegenerateError(err.message || 'Gagal membuat QRIS baru');
     } finally {
       setRegeneratingQris(false);
     }
@@ -191,7 +191,7 @@ export const OrdersPage: React.FC = () => {
 
   const handleReorder = async (item: OrderItem) => {
     if (!item.product_slug || item.product_type === 'herosms') {
-      setReorderMessage('Rute OTP perlu dipilih ulang melalui konfigurator.');
+      setReorderMessage('Layanan SMS OTP perlu dipilih ulang melalui halaman aktivasi.');
       return;
     }
     setReorderId(item.id);
@@ -220,7 +220,7 @@ export const OrdersPage: React.FC = () => {
       const res = await fetch(`/api/orders/${encodeURIComponent(id)}/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject: 'Masalah fulfillment order', message: reportMessage.trim() })
+        body: JSON.stringify({ subject: 'Kendala pengiriman pesanan', message: reportMessage.trim() })
       });
       const data = (await res.json()) as any;
       if (!res.ok) throw new Error(data.error || 'Laporan tidak dapat dikirim.');
@@ -237,11 +237,19 @@ export const OrdersPage: React.FC = () => {
   const deliveryLabel = (status?: string) => {
     switch (status) {
       case 'fulfilled': return 'Produk siap digunakan';
-      case 'failed': return 'Perlu tindakan support';
+      case 'failed': return 'Perlu bantuan layanan';
       case 'refunded': return 'Dana sudah dikembalikan';
       case 'processing': return 'Sedang menyiapkan produk';
       default: return 'Menunggu pembayaran';
     }
+  };
+
+  const formatFulfilmentError = (err?: string | null) => {
+    if (!err) return 'Kendala pemrosesan';
+    if (/stock/i.test(err)) return 'Stok sedang habis';
+    if (/price/i.test(err)) return 'Perubahan harga layanan';
+    if (/provider|herosms|network|connect|config/i.test(err)) return 'Kendala sistem aktivasi';
+    return 'Kendala teknis';
   };
 
   if (authLoading || loading) {
@@ -284,7 +292,7 @@ export const OrdersPage: React.FC = () => {
           </div>
           <h3 className="text-lg font-extrabold text-white">Belum Ada Pesanan</h3>
           <p className="text-xs text-slate-400">
-            Anda belum pernah membeli produk file, lisensi, atau aktivasi HeroSMS.
+            Anda belum pernah membeli produk file, lisensi, atau aktivasi SMS OTP.
           </p>
           <Link
             to="/"
@@ -323,7 +331,7 @@ export const OrdersPage: React.FC = () => {
                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
                 }`}>
-                  {ord.payment_status}
+                  {ord.payment_status === 'paid' ? 'Lunas' : ord.payment_status === 'refunded' ? 'Dikembalikan' : ord.payment_status === 'failed' ? 'Gagal' : 'Menunggu Bayar'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -406,7 +414,7 @@ export const OrdersPage: React.FC = () => {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status delivery</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Status Pengiriman</span>
                     <p className="text-sm font-extrabold text-white mt-1">{deliveryLabel(orderDetail.order.delivery_status)}</p>
                   </div>
                   {(orderDetail.order.delivery_status === 'processing' || orderDetail.order.delivery_status === 'awaiting_payment') && (
@@ -416,7 +424,7 @@ export const OrdersPage: React.FC = () => {
                   )}
                 </div>
                 {orderDetail.order.delivery_status === 'failed' && (
-                  <p className="text-xs text-rose-200 mt-2">Tim support dapat melakukan retry atau refund untuk item yang gagal.</p>
+                  <p className="text-xs text-rose-200 mt-2">Tim bantuan kami siap memproses ulang atau mengembalikan dana untuk produk yang mengalami kendala.</p>
                 )}
               </div>
 
@@ -460,7 +468,7 @@ export const OrdersPage: React.FC = () => {
                             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${regeneratingQris ? 'animate-spin' : ''}`} />
-                            {regeneratingQris ? 'Membuat QRIS...' : 'Generate QRIS Baru'}
+                            {regeneratingQris ? 'Membuat QRIS...' : 'Buat QRIS Baru'}
                           </button>
                         </div>
                       )}
@@ -488,7 +496,7 @@ export const OrdersPage: React.FC = () => {
                         <li>Buka aplikasi <strong>DANA</strong> atau e-wallet / banking lainnya.</li>
                         <li>Pilih menu <strong>Scan / Bayar</strong> dan arahkan kamera ke kode QR di atas.</li>
                         <li>Pastikan nama merchant <strong>Ery-store</strong> dan nominal sesuai.</li>
-                        <li>Konfirmasi pembayaran. Pesanan Anda akan langsung diproses seketika berhasil!</li>
+                        <li>Konfirmasi pembayaran. Pesanan Anda akan langsung diproses setelah pembayaran berhasil!</li>
                       </ol>
                     </div>
                   </div>
@@ -510,8 +518,8 @@ export const OrdersPage: React.FC = () => {
               {reportOpen && (
                 <div className="rounded-2xl border border-rose-800/60 bg-rose-950/20 p-4 space-y-3">
                   <div>
-                    <h4 className="text-sm font-extrabold text-rose-100">Laporkan masalah order</h4>
-                    <p className="text-xs text-rose-200/80 mt-1">Jelaskan item yang belum diterima atau kendala saat penggunaan.</p>
+                    <h4 className="text-sm font-extrabold text-rose-100">Laporkan masalah pesanan</h4>
+                    <p className="text-xs text-rose-200/80 mt-1">Jelaskan produk yang belum diterima atau kendala saat penggunaan.</p>
                   </div>
                   <label htmlFor="order-report-message" className="sr-only">Deskripsi masalah</label>
                   <textarea
@@ -538,7 +546,7 @@ export const OrdersPage: React.FC = () => {
 
               {/* Order Items List */}
               <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Item Pesanan</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Daftar Produk Pesanan</h4>
                 <div className="space-y-3">
                   {orderDetail.items.map((item) => (
                     <div key={item.id} className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-2">
@@ -547,10 +555,10 @@ export const OrdersPage: React.FC = () => {
                           <span className="font-bold text-white text-sm block">{item.product_name}</span>
                           {item.product_type === 'herosms' && (item.service_code || item.service_name) && (
                             <span className="text-xs font-semibold text-purple-300 block">
-                              Rute: {item.service_name || item.service_code} ({item.country_name || item.country_code})
+                              Aplikasi: {item.service_name || item.service_code} ({item.country_name || item.country_code})
                             </span>
                           )}
-                          <span className="text-[10px] text-slate-400 uppercase">Tipe: {item.product_type}</span>
+                          <span className="text-[10px] text-slate-400 uppercase">Tipe: {item.product_type === 'file' ? 'File Digital' : item.product_type === 'code' ? 'Lisensi' : 'SMS OTP'}</span>
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-slate-300 font-bold">{item.quantity}x</span>
@@ -570,14 +578,14 @@ export const OrdersPage: React.FC = () => {
 
                       {/* Per-item fulfilment status */}
                       <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
-                        <span className="text-slate-400">Status Pemenuhan Item:</span>
+                        <span className="text-slate-400">Status Produk:</span>
                         {item.fulfilment_status === 'fulfilled' ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Terpenuhi
                           </span>
                         ) : item.fulfilment_status === 'failed' ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1" title={item.fulfilment_error || 'Gagal Terhubung Provider'}>
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Refund Manual Diperlukan ({item.fulfilment_error || 'Provider Error'})
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1" title={formatFulfilmentError(item.fulfilment_error)}>
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Bantuan Diperlukan ({formatFulfilmentError(item.fulfilment_error)})
                           </span>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
@@ -597,12 +605,12 @@ export const OrdersPage: React.FC = () => {
                   {orderDetail.fileEntitlements.length > 0 && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-bold text-blue-400 flex items-center gap-2">
-                        <Download className="w-4 h-4" /> Unduhan File Privat (R2 Bucket)
+                        <Download className="w-4 h-4" /> Download Instan & Aman
                       </h4>
                       {orderDetail.fileEntitlements.map((fe) => (
                         <div key={fe.id} className="p-4 bg-blue-950/30 border border-blue-800/40 rounded-2xl flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <span className="text-xs font-semibold text-slate-200 block">Akses Unduhan Privat</span>
+                            <span className="text-xs font-semibold text-slate-200 block">Akses File Cepat</span>
                             <span className="text-[10px] text-slate-400">Berlaku sampai {new Date(fe.expires_at * 1000).toLocaleDateString()}</span>
                           </div>
                           <a
@@ -659,7 +667,7 @@ export const OrdersPage: React.FC = () => {
                   {orderDetail.smsActivations.length > 0 && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-bold text-purple-400 flex items-center gap-2">
-                        <Smartphone className="w-4 h-4" /> Aktivasi Nomor HeroSMS OTP
+                        <Smartphone className="w-4 h-4" /> Aktivasi SMS OTP Langsung
                       </h4>
                       {orderDetail.smsActivations.map((sms) => (
                         <SmsActivationViewer key={sms.id} activationId={sms.id} />

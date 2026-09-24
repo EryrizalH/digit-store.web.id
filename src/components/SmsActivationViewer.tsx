@@ -29,7 +29,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
         setError(data.details ? `${data.error}: ${data.details}` : (data.error || 'Gagal mengecek status SMS'));
       }
     } catch (err: any) {
-      setError(err.message || 'Gagal terhubung ke server');
+      setError(err.message || 'Kendala koneksi jaringan. Silakan coba lagi.');
     } finally {
       isFetchingRef.current = false;
       setLoading(false);
@@ -118,7 +118,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
   if (loading && !activation) {
     return (
       <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl animate-pulse text-xs text-slate-400 flex items-center gap-2">
-        <RefreshCw className="w-4 h-4 animate-spin" /> Memuat data nomor HeroSMS...
+        <RefreshCw className="w-4 h-4 animate-spin" /> Memuat data nomor SMS OTP...
       </div>
     );
   }
@@ -166,7 +166,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
             <Smartphone className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400">Aktivasi HeroSMS OTP</span>
+            <span className="text-[10px] uppercase font-bold text-slate-400">Aktivasi SMS OTP</span>
             <h4 className="text-base font-extrabold text-white tracking-wide font-mono">
               {activation.herosms_phone}
             </h4>
@@ -206,7 +206,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
         <div className="bg-emerald-950/40 border border-emerald-800/60 rounded-2xl p-4 mb-3 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider block">Kode OTP / Verification Code</span>
+              <span className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider block">Kode OTP / Verifikasi SMS</span>
               <span className="text-2xl font-black text-white font-mono tracking-widest">
                 {activation.sms_code}
               </span>
@@ -257,7 +257,7 @@ export const SmsActivationViewer: React.FC<SmsActivationViewerProps> = ({ activa
         </div>
       ) : activation.status === 'TIMEOUT' ? (
         <div className="bg-slate-950/60 rounded-2xl p-4 border border-slate-800 text-xs text-slate-400">
-          Aktivasi telah kedaluwarsa (TIMEOUT). Waktu tunggu nomor ini telah habis tanpa menerima SMS.
+          Aktivasi telah kedaluwarsa. Waktu tunggu nomor ini telah habis tanpa menerima SMS.
         </div>
       ) : activation.status === 'CANCELLED' ? (
         <div className="bg-slate-950/60 rounded-2xl p-4 border border-slate-800 text-xs text-slate-400">

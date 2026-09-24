@@ -39,7 +39,7 @@ export const ProductDetailPage: React.FC = () => {
       const res = await fetch(`/api/products/by-slug/${slug}`);
       if (!res.ok) {
         if (res.status === 404) throw new Error('Produk tidak ditemukan atau telah dinonaktifkan.');
-        throw new Error('Gagal mengambil data produk dari server.');
+        throw new Error('Gagal memuat data produk.');
       }
       const data = (await res.json()) as any;
       setProduct(data.product || null);
@@ -166,12 +166,12 @@ export const ProductDetailPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             {product.type === 'file' && (
               <span className="px-3 py-1 text-xs font-semibold rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 inline-flex items-center gap-1.5">
-                <Download className="w-4 h-4" /> Digital Download
+                <Download className="w-4 h-4" /> Download Instan
               </span>
             )}
             {product.type === 'code' && (
               <span className="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1.5">
-                <Key className="w-4 h-4" /> Lisensi Voucher
+                <Key className="w-4 h-4" /> Lisensi Otomatis
               </span>
             )}
           </div>
