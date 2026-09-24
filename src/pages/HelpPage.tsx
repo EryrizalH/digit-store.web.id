@@ -11,11 +11,11 @@ const faqs = [
 ];
 
 export const HelpPage: React.FC = () => (
-  <main className="max-w-3xl mx-auto py-8 px-4 lg:px-8 space-y-6">
+  <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:space-y-6 sm:py-8 lg:px-8">
     <Link to="/" className="inline-flex items-center gap-2 min-h-[44px] text-xs font-bold text-slate-400 hover:text-white">
       <ArrowLeft className="w-4 h-4" /> Kembali ke katalog
     </Link>
-    <header className="glass-panel rounded-3xl border border-slate-800 p-6 sm:p-8">
+    <header className="glass-panel rounded-3xl border border-slate-800 p-5 sm:p-8">
       <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400 inline-flex items-center gap-1.5"><CircleHelp className="w-4 h-4" /> Bantuan DigitStore</span>
       <h1 className="mt-2 text-2xl font-black text-white">FAQ & kebijakan penggantian</h1>
       <p className="mt-2 text-sm leading-relaxed text-slate-400">Jawaban singkat untuk pembelian produk digital, status pengiriman, dan pelaporan masalah.</p>
@@ -34,4 +34,3 @@ export const HelpPage: React.FC = () => (
     </div>
   </main>
 );
-

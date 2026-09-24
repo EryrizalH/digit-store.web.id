@@ -141,7 +141,7 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   return (
-    <main className="max-w-4xl mx-auto py-6 sm:py-8 px-4 lg:px-8 space-y-6 pb-28 sm:pb-safe">
+    <main className="mx-auto w-full max-w-4xl space-y-5 px-4 py-5 pb-36 sm:space-y-6 sm:px-6 sm:py-8 sm:pb-safe lg:px-8">
       {/* Back Button */}
       <button
         onClick={() => navigate(-1)}
@@ -151,7 +151,7 @@ export const ProductDetailPage: React.FC = () => {
       </button>
 
       {/* Main Detail Card */}
-      <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6">
+      <div className="glass-panel space-y-5 rounded-3xl border border-slate-800 p-4 sm:space-y-6 sm:p-8">
         {/* Reserved Aspect Ratio Artwork Header */}
         <ArtworkImage
           src={product.artwork_url}
@@ -191,16 +191,16 @@ export const ProductDetailPage: React.FC = () => {
 
       {/* Added Notification */}
         {addedNotice && (
-          <div className="p-4 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-2xl text-xs font-bold flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-800 bg-emerald-950/60 p-4 text-xs font-bold text-emerald-300">
             <span className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Produk berhasil ditambahkan ke keranjang!
             </span>
-            <Link to="/keranjang" className="underline hover:text-white">Lihat Keranjang</Link>
+            <Link to="/keranjang" className="inline-flex min-h-[44px] items-center underline hover:text-white">Lihat Keranjang</Link>
           </div>
         )}
       </div>
 
-      <section className="glass-panel rounded-3xl border border-slate-800 p-6 space-y-4" aria-labelledby="reviews-title">
+      <section className="glass-panel space-y-4 rounded-3xl border border-slate-800 p-4 sm:p-6" aria-labelledby="reviews-title">
         <div className="flex items-center justify-between gap-3">
           <h2 id="reviews-title" className="text-base font-extrabold text-white">Ulasan pembeli terverifikasi</h2>
           <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-300"><Star className="w-4 h-4 fill-current" /> {reviewSummary.average || '-'} ({reviewSummary.count})</span>
@@ -215,8 +215,8 @@ export const ProductDetailPage: React.FC = () => {
       </section>
 
       {/* Sticky Mobile CTA Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-[#090d16]/95 border-t border-slate-800/90 backdrop-blur-xl sm:relative sm:bg-transparent sm:border-none sm:p-0">
-        <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800/90 bg-[#090d16]/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:relative sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+        <div className="mx-auto flex max-w-4xl flex-wrap items-end justify-between gap-3 sm:gap-4">
           <div>
             <span className="text-[10px] text-slate-400 block uppercase font-bold">Harga Produk</span>
             <span className="text-xl sm:text-2xl font-black text-white">
@@ -227,7 +227,7 @@ export const ProductDetailPage: React.FC = () => {
           <button
             onClick={handleAddToCart}
             disabled={product.type === 'code' && (product.stock_count || 0) <= 0}
-            className="px-6 py-3.5 min-h-[44px] rounded-2xl bg-gradient-to-r from-indigo-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 disabled:opacity-40 text-white text-sm font-extrabold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-extrabold text-white transition-all hover:bg-indigo-500 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-indigo-500 sm:w-auto sm:rounded-2xl sm:px-6 sm:py-3.5"
           >
             <ShoppingBag className="w-5 h-5" />
             <span>Tambah ke Keranjang</span>

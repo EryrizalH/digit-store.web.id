@@ -55,13 +55,13 @@ export const InvoicePage: React.FC = () => {
   }
 
   return (
-    <main className="max-w-3xl mx-auto flex-1 py-8 px-4 sm:px-6 space-y-4 invoice-page">
+    <main className="invoice-page mx-auto flex w-full max-w-3xl flex-1 space-y-4 px-4 py-6 sm:px-6 sm:py-8">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link to={`/pesanan/${data.order.id}`} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-300 hover:text-white focus-visible:ring-2 focus-visible:ring-indigo-400"><ArrowLeft className="w-4 h-4" /> Kembali</Link>
         <button type="button" onClick={() => window.print()} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-400"><Printer className="w-4 h-4" /> Cetak / Simpan PDF</button>
       </div>
 
-      <article className="invoice-sheet rounded-3xl border border-slate-800 bg-slate-950 p-6 sm:p-10 space-y-8">
+      <article className="invoice-sheet space-y-6 rounded-3xl border border-slate-800 bg-slate-950 p-4 sm:space-y-8 sm:p-10">
         <header className="flex flex-wrap items-start justify-between gap-5 border-b border-slate-800 pb-6">
           <div>
             <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-indigo-300">DigitStore</p>
@@ -75,7 +75,19 @@ export const InvoicePage: React.FC = () => {
           </div>
         </header>
 
-        <div className="overflow-x-auto">
+        <div className="space-y-3 sm:hidden" aria-label="Daftar item invoice">
+          {data.items.map((item) => (
+            <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0"><span className="block text-sm font-bold text-white">{item.product_name}</span>{item.service_name && <span className="mt-1 block text-xs text-purple-300">{item.service_name} ({item.country_name || item.country_code})</span>}</div>
+                <span className="shrink-0 text-xs font-bold text-slate-300">{item.quantity}x</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-800 pt-3"><span className="text-xs text-slate-400">Subtotal</span><span className="text-sm font-bold text-emerald-300">{formatPrice(item.price * item.quantity)}</span></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[520px] text-left text-sm">
             <thead className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-400">
               <tr><th className="pb-3 pr-4">Produk</th><th className="pb-3 px-4 text-right">Qty</th><th className="pb-3 pl-4 text-right">Harga</th></tr>

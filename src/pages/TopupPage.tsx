@@ -119,7 +119,7 @@ export const TopupPage: React.FC = () => {
   if (!user) return null;
 
   return (
-    <main className="max-w-4xl mx-auto py-6 sm:py-8 px-4 lg:px-8 space-y-6 pb-safe">
+      <main className="mx-auto w-full max-w-4xl space-y-5 px-4 py-5 pb-safe sm:space-y-6 sm:py-8 lg:px-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <button
@@ -145,7 +145,7 @@ export const TopupPage: React.FC = () => {
         {/* Topup Form */}
         <div className="lg:col-span-2 space-y-5">
           {/* Balance Card */}
-          <div className="glass-panel rounded-3xl p-6 border border-slate-800">
+          <div className="glass-panel rounded-3xl border border-slate-800 p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-400 mb-1">Saldo Kredit Anda</p>
@@ -160,7 +160,7 @@ export const TopupPage: React.FC = () => {
           </div>
 
           {/* Amount Input */}
-          <div className="glass-panel rounded-3xl p-6 border border-slate-800 space-y-4">
+          <div className="glass-panel space-y-4 rounded-3xl border border-slate-800 p-4 sm:p-6">
             <h3 className="text-base font-extrabold text-white">Masukkan Jumlah Topup</h3>
 
             <div className="relative">
@@ -208,7 +208,7 @@ export const TopupPage: React.FC = () => {
         </div>
 
         {/* Transaction History */}
-        <div className="glass-panel rounded-3xl p-6 border border-slate-800 h-fit space-y-4">
+        <div className="glass-panel h-fit space-y-4 rounded-3xl border border-slate-800 p-4 sm:p-6">
           <h3 className="text-base font-extrabold text-white flex items-center gap-2">
             <History className="w-4 h-4 text-indigo-400" />
             Riwayat Transaksi

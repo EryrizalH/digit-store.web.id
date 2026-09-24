@@ -53,7 +53,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   return (
-    <div className="glass-card rounded-2xl p-4 flex flex-col justify-between relative group border border-slate-800/80 hover:border-indigo-500/40 transition-all">
+    <div className="glass-card group relative flex flex-col justify-between rounded-2xl border border-slate-800/80 p-3 transition-all hover:border-indigo-500/40 sm:p-4">
       <div className="space-y-3">
         {/* Reserved Aspect Ratio Artwork */}
         <Link to={targetUrl} className="block focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl overflow-hidden">
@@ -98,7 +98,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       </div>
 
       {/* Pricing & Action */}
-      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-3">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-4">
         <div>
           <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Harga</span>
           <span className="text-base font-extrabold text-white">
@@ -106,10 +106,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           <Link
             to={targetUrl}
-            className="px-3 min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all flex items-center justify-center focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="min-h-[44px] min-w-0 flex-1 rounded-xl bg-slate-800 px-3 text-center text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 focus-visible:ring-2 focus-visible:ring-indigo-500 sm:flex-none"
           >
             {product.type === 'herosms' ? 'Konfigurasi' : 'Detail'}
           </Link>

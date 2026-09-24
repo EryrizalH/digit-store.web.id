@@ -27,7 +27,21 @@
 
 :root {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --content-gutter: 1rem;
+  --safe-bottom: max(1rem, env(safe-area-inset-bottom));
   color-scheme: dark;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --content-gutter: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --content-gutter: 2rem;
+  }
 }
 
 body {
@@ -40,12 +54,29 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  scroll-padding-bottom: 8rem;
+}
+
 /* Accessibility & Safe Areas */
 .pb-safe {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 .pt-safe {
   padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+.pb-safe-lg {
+  padding-bottom: var(--safe-bottom);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 *:focus-visible {

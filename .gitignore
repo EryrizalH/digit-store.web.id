@@ -10,6 +10,7 @@ dist-ssr/
 # Cloudflare & Wrangler
 .wrangler/
 worker-startup.cpuprofile
+worker-configuration.d.ts
 
 # Logs
 logs

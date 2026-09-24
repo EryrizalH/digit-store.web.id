@@ -5,7 +5,7 @@ import { XCircle, RefreshCw, ArrowRight } from 'lucide-react';
 export const TopupCancelPage: React.FC = () => {
   return (
     <main className="max-w-md mx-auto py-12 px-4 text-center space-y-6">
-      <div className="glass-panel rounded-3xl p-10 border border-slate-800 space-y-5">
+      <div className="glass-panel rounded-3xl border border-slate-800 p-6 space-y-5 sm:p-10">
         <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto">
           <XCircle className="w-8 h-8" />
         </div>
@@ -26,7 +26,7 @@ export const TopupCancelPage: React.FC = () => {
           </Link>
           <Link
             to="/"
-            className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            className="inline-flex min-h-[44px] items-center justify-center text-xs text-slate-400 hover:text-slate-200 transition-colors"
           >
             Kembali ke Katalog
           </Link>

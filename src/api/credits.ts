@@ -23,15 +23,15 @@ creditsRouter.get('/balance', async (c) => {
   return c.json({ balance });
 });
 
-// POST /topup - create a topup payment via Sumopod
+// POST /topup creates a QRIS payment and a pending credit ledger row
 creditsRouter.post('/topup', async (c) => {
   const user = await getAuthUser(c);
   if (!user) return c.json({ error: 'Authentication required' }, 401);
 
   const { amount } = await c.req.json();
-  const topupAmount = Number(amount);
+  const topupAmount = Math.round(Number(amount));
 
-  if (!topupAmount || topupAmount < 10000) {
+  if (!Number.isFinite(topupAmount) || topupAmount < 10000) {
     return c.json({ error: 'Minimum topup amount is IDR 10,000' }, 400);
   }
 
@@ -42,7 +42,7 @@ creditsRouter.post('/topup', async (c) => {
   const topupId = `TOPUP-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
   const appUrl = c.env.APP_URL || '';
 
-  const gateway = getPaymentGateway('sumopod', c.env);
+  const gateway = getPaymentGateway('qris', c.env);
   const result = await gateway.createTransaction({
     orderId: topupId,
     amount: topupAmount,
@@ -52,10 +52,10 @@ creditsRouter.post('/topup', async (c) => {
     cancelReturnUrl: `${appUrl}/topup/cancel`
   });
 
-  // Store a pending topup record with 'topup_pending' type (not shown in history)
+  // Store the pending QRIS topup before returning the payment URL.
   await c.env.DB.prepare(`
     INSERT INTO credit_transactions (id, user_id, type, amount, reference_id, description, created_at)
-    VALUES (?, ?, 'topup_pending', ?, ?, 'Pending topup via Sumopod', CURRENT_TIMESTAMP)
+    VALUES (?, ?, 'topup_pending', ?, ?, 'Pending topup via QRIS', CURRENT_TIMESTAMP)
   `).bind(`crtx_${crypto.randomUUID()}`, user.id, topupAmount, topupId).run();
 
   // Audit log

@@ -5,23 +5,26 @@ export interface Env {
   ASSETS: Fetcher;
   
   // Environment variables & secrets
-  PAYMENT_PROVIDER?: string; // 'midtrans' | 'xendit'
+  PAYMENT_PROVIDER?: string; // 'qris' | 'midtrans' | 'xendit' | 'sumopod'
   APP_URL?: string;
   APP_ENV?: string;
   ALLOW_SIMULATED_PAYMENTS?: string;
   ALLOW_MOCK_PAYMENTS?: string;
-  
+
+  QRIS_API_BASE_URL?: string;
+  QRIS_API_KEY?: string;
+  QRIS_WEBHOOK_SECRET?: string;
+
   MIDTRANS_SERVER_KEY?: string;
   MIDTRANS_CLIENT_KEY?: string;
   MIDTRANS_IS_PRODUCTION?: string;
-  
+
   XENDIT_SECRET_KEY?: string;
   XENDIT_WEBHOOK_VERIFICATION_TOKEN?: string;
-  
+
   SUMOPOD_API_KEY?: string;
   SUMOPOD_IS_PRODUCTION?: string;
   SUMOPOD_WEBHOOK_SECRET?: string;
-  
   HEROSMS_API_KEY?: string;
   HEROSMS_BASE_URL?: string;
   HEROSMS_WEBHOOK_SECRET?: string;

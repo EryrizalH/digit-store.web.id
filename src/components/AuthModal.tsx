@@ -50,7 +50,7 @@ export const AuthModal: React.FC = () => {
       tabIndex={-1}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
     >
-      <div className="glass-modal w-full max-w-md rounded-3xl p-6 sm:p-8 relative shadow-2xl border border-slate-700/50">
+      <div className="glass-modal max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-700/50 p-5 shadow-2xl sm:p-8">
         <button
           onClick={closeAuthModal}
           aria-label="Tutup dialog autentikasi"

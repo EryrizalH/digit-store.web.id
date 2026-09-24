@@ -285,8 +285,8 @@ ordersRouter.post('/checkout', async (c) => {
   discountAmount = Math.min(subtotalAmount, Math.round(discountAmount));
   totalAmount = Math.max(0, subtotalAmount - discountAmount);
 
-  const allowedProviders = ['midtrans', 'xendit', 'sumopod', 'credit'];
-  const provider = payment_provider || c.env.PAYMENT_PROVIDER || 'midtrans';
+  const allowedProviders = ['qris', 'midtrans', 'xendit', 'sumopod', 'credit'];
+  const provider = payment_provider || c.env.PAYMENT_PROVIDER || 'qris';
   if (!allowedProviders.includes(provider)) {
     return c.json({ error: 'Metode pembayaran tidak valid.' }, 400);
   }

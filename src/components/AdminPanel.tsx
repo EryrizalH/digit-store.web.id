@@ -349,8 +349,8 @@ export const AdminPanel: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4 lg:px-8">
-      <div className="flex items-center justify-between gap-4 mb-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:py-8 lg:px-8">
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:mb-8 lg:flex-row lg:items-center">
         <div>
           <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4" /> Admin Management Portal
@@ -417,7 +417,7 @@ export const AdminPanel: React.FC = () => {
       {activeTab === 'orders' && (
         <section id="panel-orders" role="tabpanel" aria-labelledby="tab-orders" className="space-y-5">
           {metrics && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" aria-label="Ringkasan performa 30 hari">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Ringkasan performa 30 hari">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Omzet 30 hari</p>
                 <p className="mt-1 text-lg font-extrabold text-emerald-300">Rp {metrics.revenue.toLocaleString('id-ID')}</p>
@@ -600,7 +600,7 @@ export const AdminPanel: React.FC = () => {
       {activeTab === 'products' && (
         <div id="panel-products" role="tabpanel" aria-labelledby="tab-products" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Create Product Form */}
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+          <div className="glass-panel space-y-4 rounded-3xl border border-slate-800 p-4 sm:p-6">
             <h3 className="text-base font-extrabold text-white flex items-center gap-2">
               <Plus className="w-4 h-4 text-emerald-400" /> Tambah Produk Baru
             </h3>
@@ -619,7 +619,7 @@ export const AdminPanel: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor="admin-product-category" className="text-slate-300 font-semibold block mb-1">Kategori</label>
                   <select
@@ -663,7 +663,7 @@ export const AdminPanel: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor="admin-product-delivery" className="text-slate-300 font-semibold block mb-1">Pengiriman</label>
                   <select
@@ -724,7 +724,7 @@ export const AdminPanel: React.FC = () => {
               )}
 
               {type === 'herosms' && (
-                <div className="p-3 bg-purple-950/40 border border-purple-800/50 rounded-xl grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 rounded-xl border border-purple-800/50 bg-purple-950/40 p-3 sm:grid-cols-2">
                   <div>
                     <label htmlFor="admin-herosms-service" className="text-purple-300 font-semibold block">Service Default</label>
                     <input
@@ -771,7 +771,7 @@ export const AdminPanel: React.FC = () => {
           </div>
 
           {/* Products List Table */}
-          <div className="lg:col-span-2 glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+          <div className="glass-panel space-y-4 rounded-3xl border border-slate-800 p-4 sm:p-6 lg:col-span-2">
             <h3 className="text-base font-extrabold text-white flex items-center gap-2">
               <Package className="w-4 h-4 text-indigo-400" /> Daftar Produk Aktif
             </h3>
@@ -837,7 +837,7 @@ export const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'stock' && (
-        <div id="panel-stock" role="tabpanel" aria-labelledby="tab-stock" className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-4">
+        <div id="panel-stock" role="tabpanel" aria-labelledby="tab-stock" className="glass-panel mx-auto max-w-2xl space-y-4 rounded-3xl border border-slate-800 p-4 sm:p-8">
           <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
             <Key className="w-5 h-5 text-emerald-400" /> Import Stok Kode Voucher Bulk
           </h3>
@@ -889,7 +889,7 @@ export const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'otp' && (
-        <div id="panel-otp" role="tabpanel" aria-labelledby="tab-otp" className="max-w-2xl mx-auto glass-panel p-8 rounded-3xl border border-slate-800 space-y-5">
+        <div id="panel-otp" role="tabpanel" aria-labelledby="tab-otp" className="glass-panel mx-auto max-w-2xl space-y-5 rounded-3xl border border-slate-800 p-4 sm:p-8">
           <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
             <Sliders className="w-5 h-5 text-purple-400" /> Pengaturan Harga HeroSMS OTP
           </h3>
@@ -932,7 +932,7 @@ export const AdminPanel: React.FC = () => {
               </label>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="admin-otp-currency" className="text-slate-300 font-semibold block mb-1">Biaya HeroSMS (USD)</label>
                 <input
@@ -961,7 +961,7 @@ export const AdminPanel: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="admin-otp-markup" className="text-slate-300 font-semibold block mb-1">Margin (%)</label>
                 <input

@@ -200,6 +200,122 @@ export class XenditGateway implements PaymentGateway {
   }
 }
 
+export class QrisGateway implements PaymentGateway {
+  name = 'qris';
+  private apiBaseUrl: string;
+  private apiKey: string;
+  private webhookSecret: string;
+
+  constructor(apiBaseUrl: string, apiKey: string, webhookSecret: string = '') {
+    this.apiBaseUrl = apiBaseUrl.replace(/\/+$/, '');
+    this.apiKey = apiKey;
+    this.webhookSecret = webhookSecret;
+  }
+
+  async createTransaction(options: CreateTransactionOptions): Promise<CreateTransactionResult> {
+    if (!this.apiBaseUrl) {
+      throw new Error('QRIS API base URL is not configured');
+    }
+    if (!this.apiKey) {
+      throw new Error('QRIS API key is not configured');
+    }
+
+    const amount = Math.round(options.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error('QRIS transaction amount is invalid');
+    }
+
+    const res = await fetch(`${this.apiBaseUrl}/create-qris`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey
+      },
+      body: JSON.stringify({
+        amount,
+        reference_id: options.orderId
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`QRIS API error (${res.status})`);
+    }
+
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      throw new Error('QRIS API returned invalid JSON');
+    }
+
+    const responseObject = body !== null && typeof body === 'object' ? body : null;
+    const dataValue = responseObject && 'data' in responseObject ? responseObject.data : null;
+    const dataObject = dataValue !== null && typeof dataValue === 'object' ? dataValue : null;
+    const qrisId = dataObject && 'qris_id' in dataObject ? dataObject.qris_id : undefined;
+    const trxId = dataObject && 'trx_id' in dataObject ? dataObject.trx_id : undefined;
+    const qrisUrl = dataObject && 'qris_url' in dataObject ? dataObject.qris_url : undefined;
+    if (typeof qrisId !== 'string' || !qrisId ||
+      typeof trxId !== 'string' || !trxId ||
+      typeof qrisUrl !== 'string' || !qrisUrl) {
+      throw new Error('QRIS API response is missing transaction fields');
+    }
+
+    return {
+      paymentId: qrisId,
+      redirectUrl: qrisUrl,
+      raw: body
+    };
+  }
+
+  async verifyWebhook(payload: any, headers: Record<string, string>): Promise<{ orderId: string; status: PaymentStatus; paymentId?: string; grossAmount?: number }> {
+    if (!this.webhookSecret) {
+      throw new Error('QRIS webhook secret is not configured');
+    }
+
+    const callbackSecret = headers['x-webhook-secret'] || headers['X-Webhook-Secret'];
+    if (!callbackSecret || !constantTimeStringEqual(callbackSecret, this.webhookSecret)) {
+      throw new Error('Invalid QRIS webhook secret');
+    }
+
+    const orderId = typeof payload?.reference_id === 'string' ? payload.reference_id.trim() : '';
+    if (!orderId) {
+      throw new Error('Missing QRIS reference_id');
+    }
+
+    const paymentId = typeof payload?.trx_id === 'string' && payload.trx_id.trim()
+      ? payload.trx_id.trim()
+      : typeof payload?.qris_id === 'string' && payload.qris_id.trim()
+        ? payload.qris_id.trim()
+        : '';
+    if (!paymentId) {
+      throw new Error('Missing QRIS payment identifier');
+    }
+
+    const rawAmount = payload?.amount;
+    if (rawAmount === undefined || rawAmount === null || (typeof rawAmount === 'string' && !rawAmount.trim())) {
+      throw new Error('Missing QRIS amount');
+    }
+    const grossAmount = Number(rawAmount);
+    if (!Number.isFinite(grossAmount)) {
+      throw new Error('Invalid QRIS amount');
+    }
+
+    const rawStatus = typeof payload?.status === 'string' ? payload.status.trim() : '';
+    let status: PaymentStatus;
+    if (rawStatus === 'paid' || rawStatus === 'PAID') {
+      status = 'paid';
+    } else if (rawStatus === 'failed' || rawStatus === 'FAILED' || rawStatus === 'EXPIRED' || rawStatus === 'expired') {
+      status = 'failed';
+    } else if (rawStatus === 'pending' || rawStatus === 'PENDING') {
+      status = 'pending';
+    } else {
+      throw new Error('Unknown QRIS webhook status');
+    }
+
+    return { orderId, status, paymentId, grossAmount };
+  }
+}
+
 export class SumopodGateway implements PaymentGateway {
   name = 'sumopod';
   private apiKey: string;
@@ -332,6 +448,9 @@ export function getPaymentGateway(provider: string = 'midtrans', env: any): Paym
   // ponytail: require both APP_ENV === 'development' and ALLOW_MOCK_PAYMENTS === 'true' before allowing mocks
   const allowMock = env?.APP_ENV === 'development' && env?.ALLOW_MOCK_PAYMENTS === 'true';
   const p = (provider || '').toLowerCase();
+  if (p === 'qris') {
+    return new QrisGateway(env?.QRIS_API_BASE_URL || '', env?.QRIS_API_KEY || '', env?.QRIS_WEBHOOK_SECRET || '');
+  }
   if (p === 'xendit') {
     return new XenditGateway(env?.XENDIT_SECRET_KEY || '', env?.XENDIT_WEBHOOK_VERIFICATION_TOKEN || '', allowMock);
   }

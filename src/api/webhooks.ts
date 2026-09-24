@@ -3,6 +3,7 @@ import { Env } from '../types';
 import { getPaymentGateway } from '../services/payments';
 import { fulfillOrder } from '../services/fulfilment';
 import { timingSafeEqual } from '../services/auth';
+import { createInAppNotification, sendNotificationWebhook } from '../services/notifications';
 
 export const webhooksRouter = new Hono<{ Bindings: Env }>();
 
@@ -233,6 +234,139 @@ webhooksRouter.post('/sumopod', async (c) => {
     return c.json({ status: 'OK' });
   } catch (err: any) {
     return c.json({ error: err.message }, 400);
+  }
+});
+webhooksRouter.post('/qris', async (c) => {
+  let payload: unknown;
+  try {
+    payload = await c.req.json();
+  } catch {
+    return c.json({ error: 'Malformed JSON payload' }, 400);
+  }
+
+  const headers = Object.fromEntries(c.req.raw.headers.entries());
+
+  try {
+    const gateway = getPaymentGateway('qris', c.env);
+    const { orderId, status, paymentId, grossAmount } = await gateway.verifyWebhook(payload, headers);
+
+    if (!orderId) {
+      return c.json({ error: 'Missing QRIS reference_id' }, 400);
+    }
+
+    if (orderId.startsWith('TOPUP-')) {
+      const existingCompleted = await c.env.DB.prepare(
+        'SELECT * FROM credit_transactions WHERE reference_id = ? AND type = "topup" LIMIT 1'
+      ).bind(orderId).first<any>();
+      if (existingCompleted) {
+        const expectedAmount = Math.round(Number(existingCompleted.amount));
+        const paidAmount = Math.round(Number(grossAmount));
+        if (!Number.isFinite(expectedAmount) || !Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
+          return c.json({ error: 'Topup amount mismatch' }, 400);
+        }
+        return c.json({ status: 'OK' });
+      }
+
+      const topupTxn = await c.env.DB.prepare(
+        'SELECT * FROM credit_transactions WHERE reference_id = ? AND type = "topup_pending" LIMIT 1'
+      ).bind(orderId).first<any>();
+      if (!topupTxn) {
+        return c.json({ error: 'Topup reference not found' }, 404);
+      }
+
+      if (status === 'pending') {
+        return c.json({ status: 'OK' });
+      }
+
+      if (status === 'failed') {
+        await c.env.DB.prepare(
+          'DELETE FROM credit_transactions WHERE reference_id = ? AND type = "topup_pending"'
+        ).bind(orderId).run();
+        return c.json({ status: 'OK' });
+      }
+
+      const expectedAmount = Math.round(Number(topupTxn.amount));
+      const paidAmount = Math.round(Number(grossAmount));
+      if (!Number.isFinite(expectedAmount) || !Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
+        return c.json({ error: 'Topup amount mismatch' }, 400);
+      }
+
+      const claimResult = await c.env.DB.prepare(
+        'UPDATE credit_transactions SET type = "topup", description = ? WHERE reference_id = ? AND type = "topup_pending"'
+      ).bind(`Topup completed via QRIS (${paymentId})`, orderId).run();
+      const changes = claimResult.meta?.changes ?? 0;
+      if (changes === 0) {
+        return c.json({ status: 'OK' });
+      }
+
+      await c.env.DB.batch([
+        c.env.DB.prepare(`
+          INSERT INTO user_credits (user_id, balance, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(user_id) DO UPDATE SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
+        `).bind(topupTxn.user_id, topupTxn.amount, topupTxn.amount),
+        c.env.DB.prepare(`
+          INSERT INTO audit_logs (id, user_id, action, details)
+          VALUES (?, ?, ?, ?)
+        `).bind(
+          `log_${crypto.randomUUID()}`,
+          topupTxn.user_id,
+          'CREDIT_TOPUP_COMPLETED',
+          `Topup ${orderId} credited IDR ${topupTxn.amount} via QRIS`
+        )
+      ]);
+
+      return c.json({ status: 'OK' });
+    }
+
+    const order = await c.env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first<any>();
+    if (!order) {
+      return c.json({ error: 'Order not found' }, 404);
+    }
+
+    if (order.payment_provider !== 'qris') {
+      return c.json({ error: 'Payment provider mismatch' }, 400);
+    }
+
+    const expectedAmount = Math.round(Number(order.total_amount));
+    const paidAmount = Math.round(Number(grossAmount));
+    if (!Number.isFinite(expectedAmount) || !Number.isFinite(paidAmount) || expectedAmount !== paidAmount) {
+      return c.json({ error: 'Payment amount mismatch' }, 400);
+    }
+
+    if (order.payment_status === 'paid') {
+      return c.json({ status: 'OK' });
+    }
+
+    if (status === 'pending') {
+      await c.env.DB.prepare(
+        'UPDATE orders SET payment_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_status != "paid"'
+      ).bind(paymentId, orderId).run();
+      return c.json({ status: 'OK' });
+    }
+
+    const transitionResult = await c.env.DB.prepare(
+      'UPDATE orders SET payment_id = ?, payment_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_status != "paid"'
+    ).bind(paymentId, status, orderId).run();
+    const transitionChanges = transitionResult.meta?.changes ?? 0;
+
+    if (status === 'paid' && transitionChanges > 0) {
+      await fulfillOrder(orderId, order.user_id, c.env);
+      await createInAppNotification(c.env.DB, order.user_id, 'Pembayaran berhasil', `Order ${orderId} sedang diproses.`, orderId);
+      await sendNotificationWebhook(c.env, {
+        event: 'payment.paid',
+        orderId,
+        userId: order.user_id,
+        amount: expectedAmount,
+        status: 'paid'
+      });
+    }
+
+    return c.json({ status: 'OK' });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Invalid QRIS webhook';
+    const statusCode = message.includes('QRIS webhook secret') || message.includes('Invalid QRIS webhook secret') ? 401 : 400;
+    return c.json({ error: message }, statusCode);
   }
 });
 

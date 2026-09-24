@@ -39,8 +39,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
   };
 
   return (
-    <main className="max-w-md mx-auto py-10 px-4 space-y-6 pb-safe flex-1 flex flex-col justify-center">
-      <div className="glass-modal rounded-3xl p-6 sm:p-8 border border-slate-700/60 shadow-2xl space-y-6">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center space-y-5 px-4 py-8 pb-safe sm:space-y-6 sm:py-10">
+      <div className="glass-modal space-y-5 rounded-3xl border border-slate-700/60 p-5 sm:space-y-6 sm:p-8">
         <div>
           <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
             <ShieldCheck className="w-4 h-4" /> DigitStore Auth
@@ -126,9 +126,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
           {mode === 'login' ? (
             <span>
               Belum punya akun?{' '}
-              <button
+                <button
                 onClick={() => setMode('register')}
-                className="text-indigo-400 hover:underline font-semibold"
+                className="inline-flex min-h-[44px] items-center text-indigo-400 hover:underline font-semibold"
               >
                 Daftar sekarang
               </button>
@@ -138,7 +138,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ initialMode = 'login' }) => 
               Sudah punya akun?{' '}
               <button
                 onClick={() => setMode('login')}
-                className="text-indigo-400 hover:underline font-semibold"
+                className="inline-flex min-h-[44px] items-center text-indigo-400 hover:underline font-semibold"
               >
                 Masuk ke akun
               </button>

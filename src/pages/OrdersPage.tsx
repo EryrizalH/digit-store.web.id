@@ -195,7 +195,7 @@ export const OrdersPage: React.FC = () => {
   if (error) {
     return (
       <main className="max-w-7xl mx-auto py-16 px-4 text-center">
-        <div className="glass-panel max-w-md mx-auto rounded-3xl p-8 border border-rose-800/40">
+        <div className="glass-panel mx-auto max-w-md rounded-3xl border border-rose-800/40 p-6 sm:p-8">
           <AlertCircle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
           <h3 className="text-lg font-extrabold text-white mb-2">Gagal Memuat Pesanan</h3>
           <p className="text-xs text-slate-400 mb-6">{error}</p>
@@ -217,7 +217,7 @@ export const OrdersPage: React.FC = () => {
   if (orders.length === 0) {
     return (
       <main className="max-w-md mx-auto py-16 px-4 text-center space-y-4 pb-safe flex-1 flex flex-col justify-center">
-        <div className="glass-panel rounded-3xl p-8 border border-slate-800 space-y-4">
+        <div className="glass-panel rounded-3xl border border-slate-800 p-6 space-y-4 sm:p-8">
           <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto">
             <Key className="w-8 h-8" />
           </div>
@@ -237,7 +237,7 @@ export const OrdersPage: React.FC = () => {
   }
 
   return (
-    <main className="max-w-7xl mx-auto py-6 sm:py-8 px-4 lg:px-8 space-y-6 pb-safe">
+    <main className="mx-auto w-full max-w-7xl space-y-5 px-4 py-5 pb-safe sm:space-y-6 sm:py-8 lg:px-8">
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl sm:text-2xl font-extrabold text-white">Riwayat Pesanan Saya</h1>
       </div>
@@ -283,12 +283,12 @@ export const OrdersPage: React.FC = () => {
           </Link>
 
           {detailLoading ? (
-            <div className="glass-panel rounded-3xl p-8 text-center text-slate-400 border border-slate-800">
+            <div className="glass-panel rounded-3xl border border-slate-800 p-6 text-center text-slate-400 sm:p-8">
               <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-400" />
               Memuat rincian pesanan...
             </div>
           ) : detailError ? (
-            <div role="alert" className="glass-panel rounded-3xl p-8 text-center border border-rose-800/40">
+            <div role="alert" className="glass-panel rounded-3xl border border-rose-800/40 p-6 text-center sm:p-8">
               <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
               <h3 className="text-base font-extrabold text-white mb-2">Gagal Memuat Rincian Pesanan</h3>
               <p className="text-xs text-slate-400 mb-4">{detailError}</p>
@@ -303,7 +303,7 @@ export const OrdersPage: React.FC = () => {
               )}
             </div>
           ) : orderDetail ? (
-            <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6">
+            <div className="glass-panel space-y-5 rounded-3xl border border-slate-800 p-4 sm:space-y-6 sm:p-8">
               <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div>
                   <span className="text-xs text-slate-400 block">ID Transaksi</span>
@@ -499,7 +499,7 @@ export const OrdersPage: React.FC = () => {
                         {copiedCode ? 'Kode berhasil disalin ke clipboard' : copyError ? copyError : ''}
                       </div>
                       {orderDetail.stockCodes.map((code) => (
-                        <div key={code.id} className="p-4 bg-emerald-950/30 border border-emerald-800/40 rounded-2xl flex items-center justify-between gap-3">
+                        <div key={code.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-800/40 bg-emerald-950/30 p-4">
                           <div>
                             <span className="text-[10px] text-emerald-400 font-bold uppercase">{code.product_name}</span>
                             <span className="text-base font-extrabold text-white font-mono block mt-0.5">
@@ -534,7 +534,7 @@ export const OrdersPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="glass-panel rounded-3xl p-8 text-center text-slate-500 border border-slate-800">
+            <div className="glass-panel rounded-3xl border border-slate-800 p-6 text-center text-slate-500 sm:p-8">
               Pilih pesanan di sebelah kiri untuk melihat detail.
             </div>
           )}

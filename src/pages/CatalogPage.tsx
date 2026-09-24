@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Product, Category } from '../types';
 import { ProductCard } from '../components/ProductCard';
+import { CatalogFilterValues, FilterSheet } from '../components/FilterSheet';
 import { ProductCardSkeleton } from '../components/Skeleton';
-import { Download, Key, Smartphone, Sparkles, AlertCircle, RefreshCw, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, Key, Smartphone, AlertCircle, RefreshCw, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const CatalogPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -23,6 +24,7 @@ export const CatalogPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, total: 0, totalPages: 1, hasNext: false, hasPrevious: false });
 
   const fetchCategories = async () => {
@@ -121,21 +123,40 @@ export const CatalogPage: React.FC = () => {
   const resetFilters = () => {
     const next = new URLSearchParams();
     if (searchQuery) next.set('q', searchQuery);
+    if (selectedCategory) next.set('category', selectedCategory);
     setSearchParams(next);
+    setFilterSheetOpen(false);
   };
 
   const visibleCategories = categories.filter((cat) => cat.slug !== 'herosms-activation');
+  const filterValues: CatalogFilterValues = { type: selectedType, sort: selectedSort, minPrice, maxPrice, service, country, inStock, instantOnly };
+  const activeFilterCount = [selectedType, selectedSort !== 'newest' ? selectedSort : '', minPrice, maxPrice, service, country, inStock ? '1' : '', instantOnly ? '1' : ''].filter(Boolean).length;
+
+  const applyFilters = (values: CatalogFilterValues) => {
+    const next = new URLSearchParams(searchParams);
+    const entries: Array<[string, string]> = [
+      ['type', values.type],
+      ['sort', values.sort === 'newest' ? '' : values.sort],
+      ['min_price', values.minPrice],
+      ['max_price', values.maxPrice],
+      ['service', values.service.trim()],
+      ['country', values.country.trim()],
+      ['in_stock', values.inStock ? '1' : ''],
+      ['instant', values.instantOnly ? '1' : '']
+    ];
+    entries.forEach(([key, value]) => value ? next.set(key, value) : next.delete(key));
+    next.delete('page');
+    setSearchParams(next, { replace: true });
+    setFilterSheetOpen(false);
+  };
 
   return (
-    <main className="flex-1 max-w-7xl w-full mx-auto py-6 sm:py-8 px-4 lg:px-8 space-y-8 pb-safe">
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col space-y-6 px-4 py-6 pb-safe sm:space-y-8 sm:py-8 lg:px-8">
       {/* Benefit-Led Hero Section */}
-      <div className="relative overflow-hidden glass-panel rounded-3xl p-6 sm:p-10 border border-slate-800/80 bg-gradient-to-br from-indigo-950/50 via-slate-900/80 to-slate-950">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 p-5 sm:p-10">
         <div className="relative z-10 max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 mb-3">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Katalog Produk Digital & OTP
-          </span>
           <h1 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight mb-3">
-            Akses Instan <span className="bg-gradient-to-r from-indigo-400 via-white to-emerald-400 bg-clip-text text-transparent">File, Lisensi & OTP SMS</span>
+            Akses Instan <span className="text-indigo-300">File, Lisensi & OTP SMS</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 leading-relaxed mb-6">
             Dapatkan source code & software dari Cloudflare R2 Storage, kode lisensi voucher otomatis, serta nomor penerima OTP HeroSMS langsung dari dashboard Anda.
@@ -185,7 +206,7 @@ export const CatalogPage: React.FC = () => {
           onClick={() => handleSelectCategory(null)}
           className={`px-4 min-h-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 ${
             selectedCategory === null
-              ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md'
+              ? 'bg-indigo-600 text-white shadow-md'
               : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
           }`}
         >
@@ -200,7 +221,7 @@ export const CatalogPage: React.FC = () => {
             onClick={() => handleSelectCategory(cat.slug)}
             className={`px-4 min-h-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 ${
               selectedCategory === cat.slug
-                ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md'
+                ? 'bg-indigo-600 text-white shadow-md'
                 : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
             }`}
           >
@@ -209,7 +230,15 @@ export const CatalogPage: React.FC = () => {
         ))}
       </div>
 
-      <section aria-label="Filter dan urutan katalog" className="glass-panel rounded-2xl border border-slate-800 p-4 sm:p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 lg:hidden">
+        <div>
+          <p className="text-xs font-extrabold text-white">Temukan produk</p>
+          {!loading && <p className="mt-1 text-[11px] text-slate-400">{pagination.total} produk{activeFilterCount > 0 ? ` · ${activeFilterCount} filter aktif` : ''}</p>}
+        </div>
+        <button type="button" onClick={() => setFilterSheetOpen(true)} aria-expanded={filterSheetOpen} aria-controls="catalog-filter-sheet" className="flex min-h-[44px] items-center gap-2 rounded-xl border border-indigo-500/50 bg-indigo-500/10 px-3 text-xs font-bold text-indigo-200 focus-visible:ring-2 focus-visible:ring-indigo-400"><Filter className="h-4 w-4" /> Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}</button>
+      </div>
+
+      <section aria-label="Filter dan urutan katalog" className="hidden space-y-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 sm:p-5 lg:block">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-indigo-400" aria-hidden="true" />
@@ -326,6 +355,8 @@ export const CatalogPage: React.FC = () => {
         </div>
       </section>
 
+      <FilterSheet open={filterSheetOpen} values={filterValues} activeCount={activeFilterCount} onApply={applyFilters} onReset={resetFilters} onClose={() => setFilterSheetOpen(false)} />
+
       {/* Error state */}
       {error && (
         <div className="p-6 glass-panel rounded-3xl border border-rose-800/50 bg-rose-950/20 text-center space-y-3">
@@ -343,7 +374,7 @@ export const CatalogPage: React.FC = () => {
 
       {/* Catalog Grid or Skeletons */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <ProductCardSkeleton key={i} />
           ))}
@@ -363,7 +394,7 @@ export const CatalogPage: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

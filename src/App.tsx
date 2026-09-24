@@ -1,9 +1,10 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, Navigate, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { Navbar } from './components/Navbar';
 import { AuthModal } from './components/AuthModal';
+import { CartDrawer } from './components/CartDrawer';
 import { RefreshCw } from 'lucide-react';
 
 const CatalogPage = React.lazy(() => import('./pages/CatalogPage').then(m => ({ default: m.CatalogPage })));
@@ -27,10 +28,13 @@ const PageFallback: React.FC = () => (
 );
 
 export const AppContent: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen flex flex-col bg-[#090d16] text-slate-100 selection:bg-indigo-500 selection:text-white">
       <Navbar />
       <AuthModal />
+      <CartDrawer onSuccessOrder={(orderId) => navigate(`/pesanan/${orderId}`)} />
 
       <Suspense fallback={<PageFallback />}>
         <Routes>

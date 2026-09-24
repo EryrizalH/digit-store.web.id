@@ -29,11 +29,13 @@
     }
   ],
   "vars": {
-    "PAYMENT_PROVIDER": "midtrans",
+    "PAYMENT_PROVIDER": "qris",
+    "QRIS_API_BASE_URL": "https://pay.eryrizal.biz.id",
     "APP_URL": "https://digit-store.eryrizal23.workers.dev",
     "HEROSMS_BASE_URL": "https://hero-sms.com/stubs/handler_api.php",
-    "SUMOPOD_API_KEY": "",
-    "SUMOPOD_IS_PRODUCTION": "false",
-    "SUMOPOD_WEBHOOK_SECRET": ""
+    "SUMOPOD_IS_PRODUCTION": "false"
   }
+  // Set QRIS_API_KEY and QRIS_WEBHOOK_SECRET with:
+  // npx wrangler secret put QRIS_API_KEY
+  // npx wrangler secret put QRIS_WEBHOOK_SECRET
 }

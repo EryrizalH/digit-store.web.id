@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { ShoppingBag, Trash2, Plus, Minus, CreditCard, ArrowRight, ArrowLeft, AlertCircle, Wallet, Mail } from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, QrCode, ArrowRight, ArrowLeft, AlertCircle, Wallet, Mail } from 'lucide-react';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
   const { cart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
   const { user, guestCheckout, openAuthModal } = useAuth();
 
-  const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit' | 'credit'>('midtrans');
+  const [paymentProvider, setPaymentProvider] = useState<'qris' | 'credit'>('qris');
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,8 +108,17 @@ export const CartPage: React.FC = () => {
 
       clearCart();
 
-      if (data.redirectUrl && data.redirectUrl.startsWith('http')) {
-        window.location.href = data.redirectUrl;
+      const redirectUrl = typeof data.redirectUrl === 'string' ? data.redirectUrl : '';
+      let canRedirectToGateway = false;
+      if (redirectUrl) {
+        try {
+          canRedirectToGateway = new URL(redirectUrl).protocol === 'https:';
+        } catch {
+          canRedirectToGateway = false;
+        }
+      }
+      if (canRedirectToGateway) {
+        window.location.href = redirectUrl;
       } else {
         navigate(`/pesanan/${data.orderId}`);
       }
@@ -121,7 +130,7 @@ export const CartPage: React.FC = () => {
   };
 
   return (
-    <main className="max-w-4xl mx-auto py-6 sm:py-8 px-4 lg:px-8 space-y-6 pb-safe">
+    <main className="mx-auto w-full max-w-4xl space-y-5 px-4 py-5 pb-safe sm:space-y-6 sm:py-8 lg:px-8">
       <div className="flex items-center justify-between gap-4 mb-2">
         <div className="flex items-center gap-3">
           <button
@@ -182,7 +191,7 @@ export const CartPage: React.FC = () => {
               return (
                 <div
                   key={itemKey}
-                  className="glass-card rounded-2xl p-4 border border-slate-800 flex items-center justify-between gap-3"
+                  className="glass-card flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-slate-800 p-4 sm:flex-row sm:items-center"
                 >
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-bold text-white truncate mb-0.5">
@@ -198,7 +207,7 @@ export const CartPage: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center justify-end gap-2 sm:shrink-0">
                     {item.product.type === 'herosms' ? (
                       <span className="text-xs font-bold text-purple-300 px-3 py-2 bg-purple-950/60 border border-purple-800/40 rounded-xl">
                         1x
@@ -239,38 +248,32 @@ export const CartPage: React.FC = () => {
           </div>
 
           {/* Payment & Checkout Summary Side Panel */}
-          <div className="glass-panel rounded-3xl p-6 border border-slate-800 space-y-5 h-fit">
+          <div className="glass-panel h-fit space-y-5 rounded-3xl border border-slate-800 p-4 sm:p-6">
             <h3 className="text-base font-extrabold text-white pb-3 border-b border-slate-800">
               Ringkasan Pembayaran
             </h3>
 
-            {/* Payment Gateway Selector */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-300 block">
-                Pilih Gateway Pembayaran:
+                Metode Pembayaran:
               </label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setPaymentProvider('midtrans')}
-                  className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                    paymentProvider === 'midtrans'
+                  onClick={() => setPaymentProvider('qris')}
+                  className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-start justify-center gap-2 transition-all ${
+                    paymentProvider === 'qris'
                       ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
                       : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
                   }`}
                 >
-                  <CreditCard className="w-4 h-4" /> Midtrans
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentProvider('xendit')}
-                  className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                    paymentProvider === 'xendit'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                      : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  <CreditCard className="w-4 h-4" /> Xendit
+                  <QrCode className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span className="text-left">
+                    <span className="block">QRIS</span>
+                    <span className="mt-1 block text-[10px] font-normal leading-relaxed text-slate-400">
+                      Lanjut ke halaman QRIS
+                    </span>
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -284,7 +287,6 @@ export const CartPage: React.FC = () => {
                   <Wallet className="w-4 h-4" /> Kredit
                 </button>
               </div>
-
               {/* Credit balance info when credit is selected */}
               {paymentProvider === 'credit' && user && (
                 <div className={`p-3 rounded-xl border text-xs ${

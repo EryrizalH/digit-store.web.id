@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Trash2, Plus, Minus, CreditCard, ArrowRight, AlertCircle, Mail } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Trash2, Plus, Minus, QrCode, ArrowRight, AlertCircle, Mail } from 'lucide-react';
 import { useCart, getCartItemKey } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -12,7 +12,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
   const { cart, isCartOpen, closeCart, removeFromCart, updateQuantity, updateOtpQuote, totalPrice, clearCart } = useCart();
   const { user, openAuthModal, guestCheckout } = useAuth();
 
-  const [paymentProvider, setPaymentProvider] = useState<'midtrans' | 'xendit'>('midtrans');
+  const [paymentProvider] = useState<'qris'>('qris');
   const [agreedPolicy, setAgreedPolicy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +22,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
 
   // ponytail: hook traps Tab/Shift+Tab, auto-focuses close button, and restores focus on close
   const drawerRef = useFocusTrap<HTMLDivElement>(isCartOpen, closeCart);
+
+  useEffect(() => {
+    if (!isCartOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isCartOpen]);
 
   if (!isCartOpen) return null;
 
@@ -119,12 +128,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
       aria-modal="true"
       aria-labelledby="cart-drawer-title"
       tabIndex={-1}
-      className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 overflow-hidden bg-black/60"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) closeCart();
+      }}
     >
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <div className="w-screen max-w-md glass-modal border-l border-slate-800 shadow-2xl flex flex-col justify-between">
+      <div className="absolute inset-x-0 bottom-0 flex max-h-[94dvh] w-full max-w-full sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-screen sm:max-w-md">
+        <div className="glass-modal flex max-h-[94dvh] w-full flex-col justify-between rounded-t-3xl border-t border-slate-800 shadow-2xl sm:max-h-none sm:rounded-none sm:border-l sm:border-t-0">
           {/* Header */}
-          <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center justify-between border-b border-slate-800 px-4 pb-3 pt-4 sm:p-6">
             <h2 id="cart-drawer-title" className="text-lg font-extrabold text-white flex items-center gap-2">
               <span>Keranjang Belanja</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">
@@ -141,7 +153,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
           </div>
 
           {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:p-6">
             {error && (
               <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
@@ -219,38 +231,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
 
             {cart.length > 0 && (
               <div className="pt-4 border-t border-slate-800 space-y-4">
-                {/* Payment Gateway Selection */}
                 <div>
                   <span className="text-xs font-semibold text-slate-300 block mb-2">
-                    Pilih Gateway Pembayaran:
+                    Metode Pembayaran:
                   </span>
-                  <div role="radiogroup" aria-label="Pilih Gateway Pembayaran" className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={paymentProvider === 'midtrans'}
-                      onClick={() => setPaymentProvider('midtrans')}
-                      className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                        paymentProvider === 'midtrans'
-                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300'
-                          : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" /> Midtrans
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={paymentProvider === 'xendit'}
-                      onClick={() => setPaymentProvider('xendit')}
-                      className={`p-3 min-h-[44px] rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                        paymentProvider === 'xendit'
-                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                          : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" /> Xendit
-                    </button>
+                  <div className="rounded-xl border border-indigo-500 bg-indigo-500/10 p-4">
+                    <div className="flex items-start gap-3">
+                      <QrCode className="w-5 h-5 text-indigo-300 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold text-indigo-200">QRIS</p>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                          Anda akan diarahkan ke halaman QRIS untuk menyelesaikan pembayaran.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -273,7 +267,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onSuccessOrder }) => {
 
           {/* Footer Checkout */}
           {cart.length > 0 && (
-            <div className="p-6 border-t border-slate-800 bg-slate-950/80 space-y-3">
+            <div className="space-y-3 border-t border-slate-800 bg-slate-950/80 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:p-6">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-slate-400">Total Pembayaran:</span>
                 <span className="text-xl font-extrabold text-white">
